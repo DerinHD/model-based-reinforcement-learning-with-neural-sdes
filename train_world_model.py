@@ -147,6 +147,76 @@ def load_model(model: WorldModel, path: str="world_model_checkpoint.pt", device=
     print(f"Model checkpoint was loaded from {path}")
     return step
 
+def PCA_transformation(latent_posterior: torch.Tensor, 
+                       latent_prior: torch.Tensor, 
+                       rewards: torch.Tensor, 
+                       logdir: str ):  
+    """
+    Perform a PCA transformation on latent trajectories of posterior and prior.
+    A PCA is fitted on the posterior and the prior is tranformed onto this PCA space.
+    Addtionally, a color bar visualizing the mapping of latent states to predicted rewards are included
+    
+    Parameters:
+    -----------
+    latent_posterior:
+        latent trajectories of the posterior
+    latent_prior:
+        latent trajectories of the prior
+    rewards:
+       ground-truth rewards
+    logdir:
+        directory to save
+    """
+
+    # Detach tensors and convert to numpy
+    latent_posterior = latent_posterior.detach().cpu().numpy()
+    latent_prior = latent_prior.detach().cpu().numpy()
+    reward_np = rewards.detach().cpu().numpy()
+
+    B, T, L = latent_posterior.shape
+
+    # Get flattened version
+    latent_posterior_flattened = latent_posterior.reshape(B * T, L)
+    latent_prior_flattened = latent_prior.reshape(B * T, L)
+    reward_flattened = reward_np.reshape(B * T)
+
+    # Create PCA and fit on posterior. Get the first two principal components
+    pca = PCA(n_components=2)
+    pca.fit(latent_posterior_flattened)
+
+    # function generate a scatter plot
+    def scatter_plot(ax, latent_trajectory, reward_np, title):
+        latent_pca = pca.transform(latent_trajectory)
+        sc = ax.scatter(
+            latent_pca[:, 0],
+            latent_pca[:, 1],
+            c=reward_np,      
+            cmap="viridis",        
+            s=20
+        )
+
+        ax.set_title(title)
+        ax.set_xlabel("PCA 1")
+        ax.set_ylabel("PCA 2")
+        ax.grid(True)
+
+        return sc
+
+    # Create subplots with two plots (Latent space for posterior and prior)
+    fig, ax = plt.subplots(1, 2, figsize=(12, 5), sharex=True, sharey=True)
+
+    sc_posterior = scatter_plot(ax[0], latent_posterior_flattened, reward_flattened, "Posterior Latent Space")
+    sc_prior = scatter_plot(ax[1], latent_prior_flattened, reward_flattened,  "Prior Latent Space")
+
+    # Add colorbar for reward
+    colorbar = fig.colorbar(sc_posterior, ax=axes, label="Reward")
+
+    save_directory = os.path.join(logdir, "visualizations_latent_space_by_PCA")
+    os.makedirs(save_directory, exist_ok=True)
+    path_to_directory = os.path.join(save_directory, f"latent_spcae_PCA_{step}.png")
+    plt.savefig(path_to_directory)
+    plt.show()
+
 def parse_args():
     """Parse command line arguments.
     """
@@ -330,6 +400,8 @@ if __name__ == '__main__':
                     world_model.dynamics.get_feat(posterior)
                 ).mode() 
 
+                posterior_latents = world_model.dynamics.get_feat(posterior)
+
                 # 8.3.2 Decode posterior 
                 decoder = world_model.heads["decoder"]
                 reconstruction_posterior = decoder(world_model.dynamics.get_feat(posterior))["obs"].mode()
@@ -348,6 +420,12 @@ if __name__ == '__main__':
                 reward_prior = reward_head(
                     world_model.dynamics.get_feat(prior)
                 ).mode() 
+
+                prior_latents = world_model.dynamics.get_feat(prior)
+                
+                # Perform PCA transformation on posterior and prior path
+                PCA_transformation(posterior_latents, prior_latents, truth_reward, args.logdir)
+
 
                 # 8.4.2 Decode prior
                 reconstruction_prior = decoder(world_model.dynamics.get_feat(prior))["obs"].mode()
