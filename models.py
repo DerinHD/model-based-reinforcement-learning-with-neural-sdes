@@ -550,7 +550,7 @@ class ImagBehavior(nn.Module):
             # Code modification:
             # The latent SDE interface includes additional parameters for img_step method (e.g. dt)
             if self._config.use_sde:
-                succ = dynamics.img_step(state, action, imagination_dt=self._config.dt, imagination_time=self._config.imagination_time)
+                succ = dynamics.img_step(state, action, imagination_dt=self._config.imagination_dt, imagination_time=self._config.imagination_time)
             else:
                 succ = dynamics.img_step(state, action)
                 
