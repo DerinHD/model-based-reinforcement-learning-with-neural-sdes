@@ -147,7 +147,8 @@ class WorldModel(nn.Module):
         # reward (batch_size, batch_length)
         # discount (batch_size, batch_length)
         data = self.preprocess(data)
-
+        #check if dara has time
+        #print(f"Data keys: {data.keys()}")
         with tools.RequiresGrad(self):
             with torch.cuda.amp.autocast(self._use_amp):
                 embed = self.encoder(data)
@@ -325,7 +326,7 @@ class WorldModel(nn.Module):
                 action_t = actions[:, t + 1] # use action at t+1 to predict state at t+1
                 imagination_time = (times[:, t + 1] - times[:, t])[0] 
                 if self._config.use_sde:
-                    prior_per_step_state = self.dynamics.img_step(prior_per_step_state, action_t, imagination_time=imagination_time, dt=self._config.dt)
+                    prior_per_step_state = self.dynamics.img_step(prior_per_step_state, action_t, imagination_time=imagination_time, imagination_dt=self._config.imagination_dt)
                 else:
                     prior_per_step_state = self.dynamics.img_step(prior_per_step_state, action_t)
 
@@ -549,7 +550,7 @@ class ImagBehavior(nn.Module):
             # Code modification:
             # The latent SDE interface includes additional parameters for img_step method (e.g. dt)
             if self._config.use_sde:
-                succ = dynamics.img_step(state, action, dt=self._config.dt, imagination_time=self._config.imagination_time)
+                succ = dynamics.img_step(state, action, imagination_dt=self._config.dt, imagination_time=self._config.imagination_time)
             else:
                 succ = dynamics.img_step(state, action)
                 

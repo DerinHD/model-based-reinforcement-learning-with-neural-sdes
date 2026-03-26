@@ -92,7 +92,7 @@ class Dreamer(nn.Module):
                 self._update_count += 1
                 self._metrics["update_count"] = self._update_count
             if self._should_log(step):
-                # Code modification: 
+                #d Code modification: 
                 # In the irregular setting. The observation array is inhomegenous (Each element in the
                 # array has a different shape). Therefore, a checker needs to be implemented first
                 # Apply the check when iterating over each metric
@@ -309,7 +309,8 @@ def make_env(config, mode, id):
                      time_limit=config.time_limit,
                      irregular=config.irregular,
                      action_hold_min= config.action_hold_min,
-                     action_hold_max= config.action_hold_max
+                     action_hold_max= config.action_hold_max,
+                     seed = config.seed
         )
         env.set_physical_dt(config.physical_dt)
 

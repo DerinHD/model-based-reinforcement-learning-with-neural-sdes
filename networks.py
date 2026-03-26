@@ -305,7 +305,7 @@ class MultiEncoder(nn.Module):
         symlog_inputs,
     ):
         super(MultiEncoder, self).__init__()
-        excluded = ("is_first", "is_last", "is_terminal", "reward", "time") # new: included "time"
+        excluded = ("is_first", "is_last", "is_terminal", "reward") # new: included "time"
         shapes = {
             k: v
             for k, v in shapes.items()
@@ -377,7 +377,7 @@ class MultiDecoder(nn.Module):
         outscale,
     ):
         super(MultiDecoder, self).__init__()
-        excluded = ("is_first", "is_last", "is_terminal", "time") # new: included "time"
+        excluded = ("is_first", "is_last", "is_terminal") # new: included "time"
         shapes = {k: v for k, v in shapes.items() if k not in excluded}
         self.cnn_shapes = {
             k: v for k, v in shapes.items() if len(v) == 3 and re.match(cnn_keys, k)
@@ -415,7 +415,7 @@ class MultiDecoder(nn.Module):
                 vector_dist,
                 outscale=outscale,
                 name="Decoder",
-                std="learned"
+                std="learned" if vector_dist in ("tanh_normal", "normal", "trunc_normal", "huber") else 1.0,
             )
         self._image_dist = image_dist
 

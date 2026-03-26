@@ -18,7 +18,7 @@
 
 defaults:
   use_gym_env_with_replay_buffer: False
-  use_sde: False
+  use_sde: True
 
   logdir: null
   traindir: null
@@ -53,7 +53,8 @@ defaults:
   dyn_hidden: 512
   dyn_deter: 512
   dyn_stoch: 32
-  dt: 0.05
+  dt: 0.02
+  imagination_time: 0.02
   dyn_discrete: False
   dyn_rec_depth: 1
   dyn_mean_act: 'none'
@@ -208,6 +209,7 @@ gym_pendulum:
   use_sde: True     
   # If new replay buffer is used, set flag to true.
   use_gym_env_with_replay_buffer: True  
+  seed: 10
   
   steps: 200000
   envs: 1
@@ -232,7 +234,7 @@ gym_pendulum:
     minres: 4
     mlp_layers: 2
     mlp_units: 32
-    symlog_inputs: False  
+    symlog_inputs: True  
 
   decoder:
     mlp_keys: 'obs'
@@ -246,7 +248,7 @@ gym_pendulum:
     mlp_units: 128
     cnn_sigmoid: False
     image_dist: normal
-    vector_dist: normal  
+    vector_dist: symlog_mse  
     outscale: 1.0
 
   # Model parameters
@@ -264,7 +266,11 @@ gym_pendulum:
   # Frequency of environment
   physical_dt: 0.05 
   # Solver dt for SDE integration
-  dt: 0.05 
+  dt: 0.2
+  # Time duration of one imagination step, can be different from physical_dt and dt
+  imagination_dt: 0.2
+    # Time duration of one imagination step
+  imagination_time: 0.2
 
   # Batch length is used as sequence length when original data set is used
   batch_length: 20    
@@ -272,8 +278,7 @@ gym_pendulum:
   sequence_time: 1.0
   # Imagination horizon defines the number of imagination steps
   imag_horizon: 15
-  # Time duration of one imagination step
-  imagination_time: 0.05
+
   
   # Minimum action hold
   action_hold_min: 1

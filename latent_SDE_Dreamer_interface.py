@@ -139,7 +139,9 @@ class LatentSDEDreamerInterface(nn.Module):
         # For irregularly sampled data, we will use the new data set structure by the class Replay Buffer where all 
         # sequences of a batch have the same time grid.
         # Therefore, we can just take the first time grid.
-        ts = times[0] 
+        #ts = times[0] 
+
+        ts = torch.arange(T, device=device) * dt
 
         # Compute initial posterior by the initial method 
         y0_prior, y0_post, (p_mean0, p_std0, q_mean0, q_std0) = self.model.initial(B, embed_transposed[0])
@@ -254,7 +256,10 @@ class LatentSDEDreamerInterface(nn.Module):
             t_curr = current_time[b]
 
             # Stack times to define the time grid
-            ts = torch.stack([t_prev, t_curr])
+            #ts = torch.stack([t_prev, t_curr])
+
+            ts = torch.tensor([0, dt], device=embed.device)
+
             y_prev = y_prev_all[b:b+1]
 
             # Since a time interval is given, we also need to specify at least two embeddings and actions. 
@@ -294,7 +299,7 @@ class LatentSDEDreamerInterface(nn.Module):
                  prev_state: dict, 
                  prev_action: torch.Tensor, 
                  imagination_time: float, 
-                 dt:float):
+                 imagination_dt:float):
         """Dreamer Interface: img_step function.
         
         This function is used by the world model to perform imagination steps during the rollout.
@@ -341,7 +346,7 @@ class LatentSDEDreamerInterface(nn.Module):
             y_prev,
             ts,
             method="euler",
-            dt=dt,
+            dt=imagination_dt,
             names={"drift": "h", "diffusion": "g"},
             logqp=False,
         )

@@ -69,7 +69,8 @@ class GymEnv(gym.Env):
                  seed: int = None, 
                  irregular: bool = False,
                  action_hold_min: int = 1,
-                 action_hold_max: int = 2):
+                 action_hold_max: int = 2
+                 ):
         """Docstring for __init__
     
         Parameters:
