@@ -64,6 +64,7 @@ class WorldModel(nn.Module):
                 hidden_dim= config.dyn_hidden,
                 embed_dim=self.embed_size,     
                 device=config.device,
+                solver=config.sde_solver,
             )
             feat_size = config.dyn_stoch + config.dyn_deter
 
