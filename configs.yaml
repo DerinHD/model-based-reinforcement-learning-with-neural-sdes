@@ -38,6 +38,7 @@ defaults:
   precision: 32
   debug: False
   video_pred_log: True
+  sde_solver: 'euler'
 
   # Environment
   task: 'dmc_walker_walk'
@@ -53,8 +54,9 @@ defaults:
   dyn_hidden: 512
   dyn_deter: 512
   dyn_stoch: 32
-  dt: 0.02
-  imagination_time: 0.02
+  dt: 1.0
+  imagination_dt: 0.125
+  imagination_time: 1.0
   dyn_discrete: False
   dyn_rec_depth: 1
   dyn_mean_act: 'none'
@@ -209,9 +211,9 @@ gym_pendulum:
   use_sde: True     
   # If new replay buffer is used, set flag to true.
   use_gym_env_with_replay_buffer: True  
-  seed: 10
+  seed: 200
   
-  steps: 200000
+  steps: 50000
   envs: 1
   action_repeat: 1
   train_ratio: 160

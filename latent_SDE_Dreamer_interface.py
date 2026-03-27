@@ -35,7 +35,7 @@ class LatentSDEDreamerInterface(nn.Module):
     device: 
         device on which model runs    
     """
-    def __init__(self, deter_dim:int, stoch_dim:int, act_dim:int, embed_dim:int, hidden_dim:int, device="cuda"):
+    def __init__(self, deter_dim:int, stoch_dim:int, act_dim:int, embed_dim:int, hidden_dim:int, device="cuda", solver="euler"):
         super().__init__()
         from controlled_latent_sde import ControlledLatentSDE
         """Docstring for __init__
@@ -61,6 +61,8 @@ class LatentSDEDreamerInterface(nn.Module):
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim
         self.device = device
+        print(f"Using {solver} solver for SDE integration.")
+        self.solver = solver
         
         self.model = ControlledLatentSDE(
             latent_dim_deter=deter_dim,
@@ -165,7 +167,7 @@ class LatentSDEDreamerInterface(nn.Module):
             self.model,
             y0_post.to(device),
             ts,
-            method="euler",
+            method=self.solver,
             dt=dt,
             logqp=True,
             names={"drift": "f", "diffusion": "g"}
@@ -279,7 +281,7 @@ class LatentSDEDreamerInterface(nn.Module):
                 self.model,
                 y_prev,
                 ts,
-                method="euler",
+                method=self.solver,
                 dt=dt,
                 names={"drift": "f", "diffusion": "g"},
                 logqp=False,
@@ -345,7 +347,7 @@ class LatentSDEDreamerInterface(nn.Module):
             self.model,
             y_prev,
             ts,
-            method="euler",
+            method=self.solver,
             dt=imagination_dt,
             names={"drift": "h", "diffusion": "g"},
             logqp=False,
@@ -404,7 +406,7 @@ class LatentSDEDreamerInterface(nn.Module):
             self.model,
             y0,
             ts,
-            method="euler",
+            method=self.solver,
             dt=dt,
             names={"drift": "h", "diffusion": "g"},
             logqp=False,
