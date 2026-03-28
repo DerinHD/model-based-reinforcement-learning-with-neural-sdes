@@ -211,6 +211,7 @@ gym_pendulum:
   use_sde: True     
   # If new replay buffer is used, set flag to true.
   use_gym_env_with_replay_buffer: True  
+  deterministic_run: True
   seed: 200
   
   steps: 50000
