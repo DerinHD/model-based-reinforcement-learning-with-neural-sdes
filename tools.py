@@ -194,8 +194,8 @@ def simulate_with_new_replaybuffer(
         obs = {k: np.stack([o[k] for o in obs]) for k in obs[0] if "log_" not in k}
         
         # Code modification
-        # Parse current time in environment and us reset timer for reset handling
-        action, agent_state, reset_time = agent(obs, done, envs[0].unwrapped.get_current_time(), reset_time, agent_state)
+        # Parse current time in environment and us reset timer for reset handling. Also check if training or evaluation mode for time handling in agent.
+        action, agent_state, reset_time = agent(obs, done, envs[0].unwrapped.get_current_time(), reset_time, agent_state, training=not is_eval)
 
         if isinstance(action, dict):
             action = [

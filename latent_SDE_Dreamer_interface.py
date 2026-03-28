@@ -93,7 +93,7 @@ class LatentSDEDreamerInterface(nn.Module):
         embed: torch.Tensor,            
         action: torch.Tensor,              
         times: torch.Tensor,
-        dt: float,
+        dt_wm: float,
         kl_free: float = 1e-3,
     ):
         """Dreamer Interface: observe function.
@@ -109,8 +109,8 @@ class LatentSDEDreamerInterface(nn.Module):
             batch of actions
         times: torch.Tensor
             batch of times
-        dt: float
-            integration step size for the Euler solver
+        dt_wm: float
+            solver step size for world model training
         kl_free: float
             free bits
 
@@ -141,9 +141,10 @@ class LatentSDEDreamerInterface(nn.Module):
         # For irregularly sampled data, we will use the new data set structure by the class Replay Buffer where all 
         # sequences of a batch have the same time grid.
         # Therefore, we can just take the first time grid.
-        #ts = times[0] 
 
-        ts = torch.arange(T, device=device) * dt
+        #TODO: Only used for experiment with regularly sampled data. For irregularly sampled data, use actual time data
+        ts = torch.arange(T, device=device) * dt_wm 
+        #ts = times[0] 
 
         # Compute initial posterior by the initial method 
         y0_prior, y0_post, (p_mean0, p_std0, q_mean0, q_std0) = self.model.initial(B, embed_transposed[0])
@@ -168,7 +169,7 @@ class LatentSDEDreamerInterface(nn.Module):
             y0_post.to(device),
             ts,
             method=self.solver,
-            dt=dt,
+            dt=dt_wm,
             logqp=True,
             names={"drift": "f", "diffusion": "g"}
         ) 
@@ -215,7 +216,7 @@ class LatentSDEDreamerInterface(nn.Module):
         is_first: torch.Tensor
             flag to check if the current state is a starting state => latent state needs to be initialized
         dt: float
-            integration step size for the Euler solver
+            solver step size 
         current_time: torch.Tensor
             current times of the observations
 
@@ -258,9 +259,10 @@ class LatentSDEDreamerInterface(nn.Module):
             t_curr = current_time[b]
 
             # Stack times to define the time grid
-            #ts = torch.stack([t_prev, t_curr])
 
+            #TODO: Only used for experiment with regularly sampled data. For irregularly sampled data, use actual time data
             ts = torch.tensor([0, dt], device=embed.device)
+            # ts = torch.stack([t_prev, t_curr])
 
             y_prev = y_prev_all[b:b+1]
 
@@ -301,7 +303,7 @@ class LatentSDEDreamerInterface(nn.Module):
                  prev_state: dict, 
                  prev_action: torch.Tensor, 
                  imagination_time: float, 
-                 imagination_dt:float):
+                 dt_planning:float):
         """Dreamer Interface: img_step function.
         
         This function is used by the world model to perform imagination steps during the rollout.
@@ -314,8 +316,8 @@ class LatentSDEDreamerInterface(nn.Module):
             action that is performed during the imagination step
         imagination_time: float
             time duration of the imagination step 
-        dt: float
-            integration step size for the Euler solver
+        dt_planning: float
+            solver step size for the imagination step
 
         Returns:
         --------
@@ -348,7 +350,7 @@ class LatentSDEDreamerInterface(nn.Module):
             y_prev,
             ts,
             method=self.solver,
-            dt=imagination_dt,
+            dt=dt_planning,
             names={"drift": "h", "diffusion": "g"},
             logqp=False,
         )

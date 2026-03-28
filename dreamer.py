@@ -71,7 +71,7 @@ class Dreamer(nn.Module):
             plan2explore=lambda: expl.Plan2Explore(config, self._wm, reward),
         )[config.expl_behavior]().to(self._config.device)
 
-    def __call__(self, obs, reset, sequence_count_step, reset_time, state=None, training=True):
+    def __call__(self, obs, reset, sequence_count_step, reset_time, state=None, training=False):
         step = self._step
         if training:
             steps = (
@@ -83,7 +83,7 @@ class Dreamer(nn.Module):
                 # Code modification: 
                 # Check which data set is used
                 if self._config.use_gym_env_with_replay_buffer:
-                    data = self._dataset._sample_batch_by_sequence_time(self._config.sequence_time, subsampling_enabled=self._config.subsampling)
+                    data = self._dataset._sample_batch_by_sequence_time(self._config.sequence_time, subsampling_enabled=self._config.subsampling_enabled) # different
                 else:
                     data = next(self._dataset)
 
@@ -142,11 +142,11 @@ class Dreamer(nn.Module):
         if state is None: 
             latent = action = None
         elif self._config.use_sde and self._config.use_gym_env_with_replay_buffer and sequence_count_step >= reset_time:
-            print("Resetting state", "at time: ", sequence_count_step)
+            # print("Resetting state", "at time: ", sequence_count_step)
             latent = action = None
             reset_time += self._config.sequence_time
         elif self._config.use_sde and sequence_count_step % self._config.batch_length == 0:
-            print("Resetting state", "at step", sequence_count_step)
+            # print("Resetting state", "at step", sequence_count_step)
             latent = action = None
         else:
             latent, action = state
@@ -157,7 +157,11 @@ class Dreamer(nn.Module):
         # Code modification:
         # obs_step method of latent SDE model includes dt and current time of observation as parameters
         if self._config.use_sde:
-            latent = self._wm.dynamics.obs_step(latent, action, embed, obs["is_first"], dt= self._config.dt, current_time=obs["time"])
+            # for dt we either use dt_wm (training mode) or dt_env_eval (evaluation mode)
+            if training:
+                latent = self._wm.dynamics.obs_step(latent, action, embed, obs["is_first"], dt=self._config.dt_wm, current_time=obs["time"])
+            else:
+                latent = self._wm.dynamics.obs_step(latent, action, embed, obs["is_first"], dt=self._config.dt_env_eval, current_time=obs["time"])
         else:
             latent, _ = self._wm.dynamics.obs_step(latent, action, embed, obs["is_first"])
 
@@ -306,13 +310,21 @@ def make_env(config, mode, id):
     
         env = GymEnv(name=task, 
                      action_repeat=config.action_repeat, 
-                     time_limit=config.time_limit,
+                     time_limit= config.time_limit_train if "train" in mode else config.time_limit_eval,
                      irregular=config.irregular,
                      action_hold_min= config.action_hold_min,
                      action_hold_max= config.action_hold_max,
                      seed = config.seed
         )
-        env.set_physical_dt(config.physical_dt)
+        if mode == "train":
+            env.set_physical_dt(config.dt_env_train)
+        elif mode == "eval":
+            env.set_physical_dt(config.dt_env_eval)
+        else:
+            # raise error if mode is not train or eval
+            raise ValueError(f"Invalid mode: {mode}")
+        
+        print("Physical dt of the environment: ", env.get_physical_dt())    
 
         env = wrappers.NormalizeActions(env)
     else:
@@ -429,7 +441,7 @@ def main(config):
 
         # Code modification:
         # Due to reset handling, additional (unsused) parameters need to be included to the method
-        def random_agent(o, d, s, t, r):
+        def random_agent(obs, done, current_time, reset_time, state, training):
             action = random_actor.sample()
             logprob = random_actor.log_prob(action)
             return {"action": action, "logprob": logprob}, None, 0.0

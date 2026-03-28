@@ -224,7 +224,6 @@ gym_pendulum:
   eval_every: 1000
 
   task: gym_Pendulum-v1
-  time_limit: 10
 
   encoder:
     mlp_keys: 'obs'
@@ -263,28 +262,39 @@ gym_pendulum:
   dyn_scale: 1.0        
   rep_scale: 0.1            
   
-  # Enable/Disable irregularity 
-  irregular: False
-  # Frequency of environment
-  physical_dt: 0.05 
-  # Solver dt for SDE integration
-  dt: 0.2
-  # Time duration of one imagination step, can be different from physical_dt and dt
-  imagination_dt: 0.2
-    # Time duration of one imagination step
-  imagination_time: 0.2
+  # Frequency of environment in training mode
+  dt_env_train: 0.1
+  # Time limit for one episode in seconds in training mode
+  time_limit_train: 10
+  # Frequency of environment in evaluation mode
+  dt_env_eval: 0.01
+  # Time limit for one episode in seconds in evaluation mode
+  time_limit_eval: 10
+
+  # Solver dt for for world model training
+  dt_wm: 0.1
+  # Sequence time for world model training (Time grid for WM training: [0, dt_wm, 2*dt_wm, ..., sequence_time]). Used when new replay buffer is used 
+  sequence_time: 2.0
+
+  # Solver dt for imagination
+  dt_planning: 0.1
+
+  # Time duration of one imagination step 
+  imagination_time: 0.1
+
+  # Imagination horizon defines the number of imagination steps 
+  # (Time grid for imagination: [0, imagination_time, 2*imagination_time, ..., imag_horizon*imagination_time])
+  imag_horizon: 15
 
   # Batch length is used as sequence length when original data set is used
   batch_length: 20    
-  # Sequence time is used when new replay buffer is used
-  sequence_time: 1.0
-  # Imagination horizon defines the number of imagination steps
-  imag_horizon: 15
 
-  
+  # Settings for irregular case
+  # Enable/Disable irregularity 
+  irregular: False
   # Minimum action hold
   action_hold_min: 1
   # Maximum action hold
   action_hold_max: 2
   # Enable/Disable Subsampling
-  subsampling: False
+  subsampling_enabled: False

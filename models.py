@@ -162,7 +162,7 @@ class WorldModel(nn.Module):
                         data["action"], 
                         data["time"],
                         kl_free=self._config.kl_free,
-                        dt=self._config.dt,
+                        dt_wm=self._config.dt_wm,
                     )
                     kl_free = self._config.kl_free
                     dyn_scale = self._config.dyn_scale
@@ -270,7 +270,7 @@ class WorldModel(nn.Module):
             if self._config.use_sde:
                 posterior, _ = self.dynamics.observe(embed=embed, 
                                                         action=actions, 
-                                                        dt=self._config.dt,
+                                                        dt_wm=self._config.dt_wm,
                                                         times=times)
             else:
                 posterior, _ = self.dynamics.observe(embed=embed, action=actions, is_first=is_first)
@@ -302,7 +302,7 @@ class WorldModel(nn.Module):
                         embed = embed_t,
                         is_first = is_first_t,
                         current_time = time_t,
-                        dt = self._config.dt
+                        dt = self._config.dt_wm,
                     )
                 else:
                     posterior_per_step_state, _ = self.dynamics.obs_step(
@@ -327,7 +327,7 @@ class WorldModel(nn.Module):
                 action_t = actions[:, t + 1] # use action at t+1 to predict state at t+1
                 imagination_time = (times[:, t + 1] - times[:, t])[0] 
                 if self._config.use_sde:
-                    prior_per_step_state = self.dynamics.img_step(prior_per_step_state, action_t, imagination_time=imagination_time, imagination_dt=self._config.imagination_dt)
+                    prior_per_step_state = self.dynamics.img_step(prior_per_step_state, action_t, imagination_time=imagination_time, dt_planning=self._config.dt_planning)
                 else:
                     prior_per_step_state = self.dynamics.img_step(prior_per_step_state, action_t)
 
@@ -551,7 +551,7 @@ class ImagBehavior(nn.Module):
             # Code modification:
             # The latent SDE interface includes additional parameters for img_step method (e.g. dt)
             if self._config.use_sde:
-                succ = dynamics.img_step(state, action, imagination_dt=self._config.imagination_dt, imagination_time=self._config.imagination_time)
+                succ = dynamics.img_step(state, action, dt_planning =self._config.dt_planning, imagination_time=self._config.imagination_time)
             else:
                 succ = dynamics.img_step(state, action)
                 
