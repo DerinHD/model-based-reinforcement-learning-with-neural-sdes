@@ -30,6 +30,7 @@ from tqdm import tqdm
 import os
 import json
 import argparse
+import tools
 
 def sample_trajectory(env: GymEnv, replayBuffer: ReplayBuffer):
     """Sample a trajectory from the pendulum environment using random actions.
@@ -152,6 +153,7 @@ def save_metadata(args, filename_path: str="metadata.json"):
 def main():
     # Parse arguments 
     args = parse_args()
+    tools.set_seed_everywhere(args.seed)
 
     # Save meta data to JSON file
     save_metadata(args, os.path.join(args.directory, "metadata.json"))
@@ -161,7 +163,9 @@ def main():
                  irregular=args.irregular, 
                  time_limit=args.time_limit, 
                  action_hold_min=args.action_hold_min,
-                 action_hold_max=args.action_hold_max)
+                 action_hold_max=args.action_hold_max,
+                 seed=args.seed)
+    env.action_space.seed(args.seed)
 
     # Set frequency of environment 
     env.set_physical_dt(args.physical_step_size)

@@ -97,6 +97,8 @@ class GymEnv(gym.Env):
         # Initialize original environment 
         self._env = gym.make(name)
 
+        self.seed = seed
+
         if seed is not None:
             self._env.reset(seed=seed)
         
@@ -247,8 +249,8 @@ class GymEnv(gym.Env):
             self.make_time_grid()
 
         # If seed is given, parse to reset function
-        if seed is not None:
-            obs, _ = self._env.reset(seed=seed)
+        if self.seed is not None:
+            obs, _ = self._env.reset(seed=self.seed)
         else:
             obs, _ = self._env.reset()
         

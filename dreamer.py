@@ -338,7 +338,7 @@ def make_env(config, mode, id):
         env = wrappers.TimeLimit(env, config.time_limit)
         
     env = wrappers.SelectAction(env, key="action")
-    env = wrappers.UUID(env)
+    env = wrappers.UUID(env, prefix=f"{mode}-{id}")
     if suite == "minecraft":
         env = wrappers.RewardObs(env)
     return env

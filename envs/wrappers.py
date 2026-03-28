@@ -1,7 +1,5 @@
-import datetime
 import gym
 import numpy as np
-import uuid
 
 class TimeLimit(gym.Wrapper):
     def __init__(self, env, duration):
@@ -105,12 +103,13 @@ class SelectAction(gym.Wrapper):
 
 
 class UUID(gym.Wrapper):
-    def __init__(self, env):
+    def __init__(self, env, prefix="env"):
         super().__init__(env)
-        timestamp = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
-        self.id = f"{timestamp}-{str(uuid.uuid4().hex)}"
+        self._prefix = prefix
+        self._episode = 0
+        self.id = f"{self._prefix}-ep{self._episode:08d}"
 
     def reset(self):
-        timestamp = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
-        self.id = f"{timestamp}-{str(uuid.uuid4().hex)}"
+        self._episode += 1
+        self.id = f"{self._prefix}-ep{self._episode:08d}"
         return self.env.reset()

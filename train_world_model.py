@@ -274,6 +274,9 @@ if __name__ == '__main__':
     with open(os.path.join(args.logdir, "used_configs.yaml"), "w") as f:
         yaml.dump(vars(config), f)
     print("Final configs used for training: ", config)
+    tools.set_seed_everywhere(config.seed)
+    if getattr(config, "deterministic_run", False):
+        tools.enable_deterministic_run()
 
     # 3. Create environment to extract observation and action space. This environment will not be used further in this script
     env = GymEnv("Pendulum-v1", irregular=False, time_limit=10.0)
