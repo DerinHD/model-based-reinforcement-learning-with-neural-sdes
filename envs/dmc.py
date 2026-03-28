@@ -50,6 +50,30 @@ class DeepMindControl:
         self.dt = self.dt_env * self._action_repeat
         print(f"dt = {self.dt}")
 
+    def set_physical_dt(self, value):
+        value = float(value)
+        if value <= 0.0:
+            raise ValueError(f"physical dt must be positive, got {value}")
+
+        action_repeat = value / self.dt_env
+        rounded_action_repeat = int(round(action_repeat))
+        if not np.isclose(action_repeat, rounded_action_repeat, rtol=0.0, atol=1e-8):
+            raise ValueError(
+                "Requested physical dt "
+                f"{value} is not an integer multiple of the native DMC control dt "
+                f"{self.dt_env}."
+            )
+
+        self._action_repeat = max(1, rounded_action_repeat)
+        self.dt = self.dt_env * self._action_repeat
+        print(
+            "Updated DMC physical dt to "
+            f"{self.dt} using action_repeat={self._action_repeat}"
+        )
+
+    def get_physical_dt(self):
+        return self.dt
+
     @property
     def observation_space(self):
         spaces = {}

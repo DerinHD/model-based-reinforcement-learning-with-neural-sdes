@@ -82,7 +82,7 @@ class Dreamer(nn.Module):
             for _ in range(steps):
                 # Code modification: 
                 # Check which data set is used
-                if self._config.use_gym_env_with_replay_buffer:
+                if self._config.use_replay_buffer:
                     data = self._dataset._sample_batch_by_sequence_time(self._config.sequence_time, subsampling_enabled=self._config.subsampling_enabled) # different
                 else:
                     data = next(self._dataset)
@@ -118,7 +118,7 @@ class Dreamer(nn.Module):
                     self._metrics[name] = []
 
                 if self._config.video_pred_log:
-                    if self._config.use_gym_env_with_replay_buffer:
+                    if self._config.use_replay_buffer:
                         openl = self._wm.video_pred(self._dataset.sample_batch_full_trajectory(), self._config.traindir, self._step)
                     else:
                         openl = self._wm.video_pred(next(self._dataset))
@@ -137,11 +137,11 @@ class Dreamer(nn.Module):
         # Reset handling: Since euler solver for SDE integration is not stable for long horizon. A reset needs
         # to be performed at the end of each sequence window defined by 
         # - batch_length for original dataset
-        # - reset_time for replay buffer
+        # - reset_time for time-based rollouts
         # The variable sequence_count_step is either a time or a step counter
         if state is None: 
             latent = action = None
-        elif self._config.use_sde and self._config.use_gym_env_with_replay_buffer and sequence_count_step >= reset_time:
+        elif self._config.use_sde and reset_time is not None and sequence_count_step >= reset_time:
             # print("Resetting state", "at time: ", sequence_count_step)
             latent = action = None
             reset_time += self._config.sequence_time
@@ -261,6 +261,14 @@ def make_env(config, mode, id):
         env = dmc.DeepMindControl(
             task, config.action_repeat, config.size, seed=config.seed + id
         )
+        if mode == "train":
+            env.set_physical_dt(config.dt_env_train)
+            print("Physical dt of the environment: ", env.get_physical_dt())
+        elif mode == "eval":
+            env.set_physical_dt(config.dt_env_eval)
+            print("Physical dt of the environment: ", env.get_physical_dt())
+        else:
+            raise ValueError(f"Invalid mode: {mode}")
         env = wrappers.NormalizeActions(env)
     elif suite == "atari":
         import envs.atari as atari
@@ -330,12 +338,20 @@ def make_env(config, mode, id):
     else:
         raise NotImplementedError(suite)
 
-    # Code modification:
     # Check that TimeLimit wrapper is not used for the gym environment setting because
     # the time limit wrapper is defined by a time limit in terms 
     # of number of steps but gym environment uses a time limit in terms of seconds
-    if not config.use_gym_env_with_replay_buffer:
-        env = wrappers.TimeLimit(env, config.time_limit)
+    if not config.use_replay_buffer:
+        if suite == "dmc":
+            if mode == "train":
+                time_limit = int(np.ceil(config.time_limit_train / env.get_physical_dt()))
+            elif mode == "eval":
+                time_limit = int(np.ceil(config.time_limit_eval / env.get_physical_dt()))
+            else:
+                raise ValueError(f"Invalid mode: {mode}")
+            env = wrappers.TimeLimit(env, time_limit)
+        elif suite != "gym":
+            env = wrappers.TimeLimit(env, config.time_limit)
         
     env = wrappers.SelectAction(env, key="action")
     env = wrappers.UUID(env, prefix=f"{mode}-{id}")
@@ -345,6 +361,23 @@ def make_env(config, mode, id):
 
 def main(config):
     print("Main function.--------------------------------")
+    suite, _ = config.task.split("_", 1)
+    if (
+        config.use_sde
+        and not config.use_replay_buffer
+        and suite in ("dmc", "gym")
+    ):
+        expected_sequence_time = config.batch_length * config.dt_env_train
+        if not np.isclose(config.sequence_time, expected_sequence_time):
+            raise ValueError(
+                "For regular time-based environments without replay buffer, "
+                "sequence_time must match batch_length * dt_env_train. "
+                f"Got sequence_time={config.sequence_time}, "
+                f"batch_length={config.batch_length}, "
+                f"dt_env_train={config.dt_env_train}, "
+                f"expected {expected_sequence_time}."
+            )
+
     tools.set_seed_everywhere(config.seed)
     if config.deterministic_run:
         tools.enable_deterministic_run()
@@ -369,7 +402,7 @@ def main(config):
 
     # Code modification:
     # Determine number of environment steps 
-    if config.use_gym_env_with_replay_buffer:
+    if config.use_replay_buffer:
         step = count_steps_new_replay_buffer(config.traindir)
     else:
         step = count_steps_old_dataset(config.traindir)
@@ -381,7 +414,7 @@ def main(config):
 
     # Code modification
     # Initialize new replay buffer or old dataset
-    if config.use_gym_env_with_replay_buffer:
+    if config.use_replay_buffer:
         # Create replay buffers 
         replay_buffer_train = ReplayBuffer(directory=config.traindir,
                                         batch_size=config.batch_size,
@@ -420,7 +453,7 @@ def main(config):
     if not config.offline_traindir:
         # Code modification:
         # Prefill depends on type of dataset
-        if config.use_gym_env_with_replay_buffer:
+        if config.use_replay_buffer:
             prefill = max(0, config.prefill - count_steps_new_replay_buffer(config.traindir))
         else:
             prefill = max(0, config.prefill - count_steps_old_dataset(config.traindir))
@@ -448,7 +481,7 @@ def main(config):
 
         # Code modification:
         # Parse different arguments to the simulate function dependend on which dataset is used
-        if config.use_gym_env_with_replay_buffer:
+        if config.use_replay_buffer:
             state = tools.simulate_with_new_replaybuffer(
                 random_agent,
                 train_envs,
@@ -475,7 +508,7 @@ def main(config):
 
     # Code modification:
     # Parse dataset to the Dreamer agent
-    if config.use_gym_env_with_replay_buffer:
+    if config.use_replay_buffer:
         agent = Dreamer(
             train_envs[0].observation_space,
             train_envs[0].action_space,
@@ -514,7 +547,7 @@ def main(config):
 
             # Code modification:
             # Parse different arguments to the simulate function dependend on which dataset is used
-            if config.use_gym_env_with_replay_buffer:
+            if config.use_replay_buffer:
                 tools.simulate_with_new_replaybuffer(
                     eval_policy,
                     eval_envs,
@@ -534,7 +567,7 @@ def main(config):
                     is_eval=True,
                     episodes=config.eval_episode_num,
                 )
-            if config.video_pred_log and not config.use_gym_env_with_replay_buffer:
+            if config.video_pred_log and not config.use_replay_buffer:
                 video_pred = agent._wm.video_pred(next(eval_dataset))
                 logger.video("eval_openl", to_np(video_pred))
 
@@ -542,7 +575,7 @@ def main(config):
 
         # Code modification:
         # Parse different arguments to the simulate function dependend on which dataset is used
-        if config.use_gym_env_with_replay_buffer:
+        if config.use_replay_buffer:
             state = tools.simulate_with_new_replaybuffer(
                 agent,
                 train_envs,

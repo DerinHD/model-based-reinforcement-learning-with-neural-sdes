@@ -248,10 +248,10 @@ class WorldModel(nn.Module):
 
     def video_pred(self, data, traindir, step):
         # Code modification: 
-        # If use_gym_env_with_replay_buffer is set to True, use custom evaluation of the world model.
+        # If use_replay_buffer is set to True, use custom evaluation of the world model.
         # This evaluation is similar to the one described in train_world_model.py and there for the process
         # is not commented
-        if self._config.use_gym_env_with_replay_buffer:
+        if self._config.use_replay_buffer:
             import matplotlib.pyplot as plt
             import numpy as np
             import os
@@ -541,6 +541,15 @@ class ImagBehavior(nn.Module):
         dynamics = self._world_model.dynamics
         flatten = lambda x: x.reshape([-1] + list(x.shape[2:]))
         start = {k: flatten(v) for k, v in start.items()}
+        use_closed_loop_control = (
+            self._config.use_sde
+            and self._config.dt_planning < self._config.imagination_time
+        )
+        if use_closed_loop_control and self._config.imag_gradient != "dynamics":
+            raise NotImplementedError(
+                "Closed-loop planning within an imagination step is "
+                "currently only supported for imag_gradient='dynamics'."
+            )
 
         def step(prev, _):
             state, _, _ = prev
@@ -551,7 +560,13 @@ class ImagBehavior(nn.Module):
             # Code modification:
             # The latent SDE interface includes additional parameters for img_step method (e.g. dt)
             if self._config.use_sde:
-                succ = dynamics.img_step(state, action, dt_planning =self._config.dt_planning, imagination_time=self._config.imagination_time)
+                succ = dynamics.img_step(
+                    state,
+                    action,
+                    dt_planning=self._config.dt_planning,
+                    imagination_time=self._config.imagination_time,
+                    controller=policy if use_closed_loop_control else None,
+                )
             else:
                 succ = dynamics.img_step(state, action)
                 

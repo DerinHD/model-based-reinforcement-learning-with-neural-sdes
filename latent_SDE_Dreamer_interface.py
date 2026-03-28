@@ -303,7 +303,8 @@ class LatentSDEDreamerInterface(nn.Module):
                  prev_state: dict, 
                  prev_action: torch.Tensor, 
                  imagination_time: float, 
-                 dt_planning:float):
+                 dt_planning: float,
+                 controller=None):
         """Dreamer Interface: img_step function.
         
         This function is used by the world model to perform imagination steps during the rollout.
@@ -313,11 +314,16 @@ class LatentSDEDreamerInterface(nn.Module):
         prev_state: dict
             previous latent state
         prev_action: torch.Tensor
-            action that is performed during the imagination step
+            action that is performed during the imagination step. If a controller
+            is given, this action is only kept for compatibility and logging.
         imagination_time: float
             time duration of the imagination step 
         dt_planning: float
             solver step size for the imagination step
+        controller:
+            optional closed-loop controller that is queried during the SDE
+            integration. This enables multiple control decisions inside one
+            imagination step while rewards stay on the defined time grid.
 
         Returns:
         --------
@@ -337,23 +343,29 @@ class LatentSDEDreamerInterface(nn.Module):
             device=device
         )
         
-        # Dummy context since prior is not conditioned on future observations
+        # Dummy context since prior is not conditioned on future observations.
+        # When a controller is provided, actions are taken from the controller
+        # inside the drift function and the contextualized actions are ignored.
         ctx_dummy = torch.zeros(2, B, self.embed_dim, device=device)
         acts_pair = torch.stack([prev_action, prev_action], dim=0)
 
         # Store contexts in latent SDE model
         self.model.contextualize((ts, ctx_dummy, acts_pair))
+        self.model.set_controller(controller)
 
-        # Perform SDE integration for the time interval
-        y = torchsde.sdeint(
-            self.model,
-            y_prev,
-            ts,
-            method=self.solver,
-            dt=dt_planning,
-            names={"drift": "h", "diffusion": "g"},
-            logqp=False,
-        )
+        try:
+            # Perform SDE integration for the time interval
+            y = torchsde.sdeint(
+                self.model,
+                y_prev,
+                ts,
+                method=self.solver,
+                dt=dt_planning,
+                names={"drift": "h", "diffusion": "g"},
+                logqp=False,
+            )
+        finally:
+            self.model.set_controller(None)
 
         y_next = y[1]
 

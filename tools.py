@@ -309,8 +309,13 @@ def simulate_with_old_dataset(
         agent_state = None
         reward = [0] * len(envs)
         sequence_count_step = 0
+        reset_time = 0.0
     else:
-        step, episode, done, length, obs, agent_state, reward, sequence_count_step = state
+        if len(state) == 8:
+            step, episode, done, length, obs, agent_state, reward, sequence_count_step = state
+            reset_time = 0.0
+        else:
+            step, episode, done, length, obs, agent_state, reward, sequence_count_step, reset_time = state
 
     while (steps and step < steps) or (episodes and episode < episodes):
         print("step", step, "of", steps, "episode", episode, "of", episodes)
@@ -335,8 +340,21 @@ def simulate_with_old_dataset(
         obs = {k: np.stack([o[k] for o in obs]) for k in obs[0] if "log_" not in k}
 
         # Code modification
-        # Reset handling is performed by a counter called sequence_count_step
-        action, agent_state, reset_time = agent(obs, done, sequence_count_step, None, agent_state)
+        # Reset handling is time-based for environments that provide a time axis.
+        if "time" in obs:
+            current_count = float(obs["time"][0])
+            current_reset_time = reset_time
+        else:
+            current_count = sequence_count_step
+            current_reset_time = None
+        action, agent_state, reset_time = agent(
+            obs,
+            done,
+            current_count,
+            current_reset_time,
+            agent_state,
+            training=not is_eval,
+        )
         sequence_count_step += 1
 
         if isinstance(action, dict):
@@ -375,7 +393,7 @@ def simulate_with_old_dataset(
 
         if done.any():
             sequence_count_step = 0
-            reset_time = 0
+            reset_time = 0.0
 
             indices = [index for index, d in enumerate(done) if d]
             # logging for done episode
@@ -425,7 +443,17 @@ def simulate_with_old_dataset(
         while len(cache) > 1:
             # FIFO
             cache.popitem(last=False)
-    return (step - steps, episode - episodes, done, length, obs, agent_state, reward, sequence_count_step)
+    return (
+        step - steps,
+        episode - episodes,
+        done,
+        length,
+        obs,
+        agent_state,
+        reward,
+        sequence_count_step,
+        reset_time,
+    )
 
 def add_to_cache(cache, id, transition):
     if id not in cache:

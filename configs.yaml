@@ -1,13 +1,13 @@
 # This configuration file specifies the environment and model parameters.
 # Please note the following:
-# 1. To use the DMC benchmarks, use the following setting: use_gym_env_with_replay_buffer: False
+# 1. To use the DMC benchmarks, use the following setting: use_replay_buffer: False
 # This ensures that the original dataset structure from Dreamer us used. 
-# Do not set the flag to true, otherwise, the code will not run.
+# Do not set the flag to true, because the new replay buffer was not tested on the DMC benchmarks. The code may crash if the flag is set to true.
 # ------
 # 2. To use irregular setting:
 # - Edit parameters of the gym_pendulum config
 # - Run the script with --config gym_Pendulum
-# - Enable new replay buffer: -- use_gym_env_with_replay_buffer: True
+# - Enable new replay buffer: -- use_replay_buffer: True
 # - Specify number of action holds by action_hold_min and action_hold_max
 # - Specify frequency of environment
 # - Enable subsampling with the flag subsampling
@@ -17,7 +17,7 @@
 # 3. To switch between the RSSM and latent neural SDE model, use the flag use_sde
 
 defaults:
-  use_gym_env_with_replay_buffer: False
+  use_replay_buffer: False
   use_sde: True
 
   logdir: null
@@ -43,20 +43,39 @@ defaults:
   # Environment
   task: 'dmc_walker_walk'
   size: [64, 64]
-  envs: 1
   action_repeat: 2
+  # Frequency of environment in training mode
+  dt_env_train: 0.05
+  # Frequency of environment in evaluation mode
+  dt_env_eval: 0.025
+  # Time limit for one episode in seconds in training mode
+  time_limit_train: 25
+  # Time limit for one episode in seconds in evaluation mode
+  time_limit_eval: 25
+  envs: 1
   time_limit: 1000
   grayscale: False
   prefill: 2500
   reward_EMA: True
 
+  # World model / rollout alignment
+  # Solver dt for for world model training
+  dt_wm: 0.0125
+  # Sequence time for world model training (Time grid for WM training: [0, dt_wm, 2*dt_wm, ..., sequence_time]). Used when new replay buffer is used
+  sequence_time: 2.5
+  batch_length: 50
+
+  # Planning
+  # Solver dt for imagination
+  dt_planning: 0.05
+  # Time duration of one imagination step
+  imagination_time: 0.05
+  imag_horizon: 15
+
   # Model
   dyn_hidden: 512
   dyn_deter: 512
   dyn_stoch: 32
-  dt: 1.0
-  imagination_dt: 0.125
-  imagination_time: 1.0
   dyn_discrete: False
   dyn_rec_depth: 1
   dyn_mean_act: 'none'
@@ -87,7 +106,6 @@ defaults:
 
   # Training
   batch_size: 16
-  batch_length: 64
   train_ratio: 512
   pretrain: 100
   model_lr: 1e-4
@@ -99,7 +117,6 @@ defaults:
   # Behavior.
   discount: 0.997
   discount_lambda: 0.95
-  imag_horizon: 15
   imag_gradient: 'dynamics'
   imag_gradient_mix: 0.0
   eval_state_mean: False
@@ -118,19 +135,19 @@ defaults:
   disag_action_cond: False
 
 dmc_proprio:
-  steps: 5e5
   action_repeat: 2
   envs: 4
   train_ratio: 512
+  steps: 5e5
   video_pred_log: false
   encoder: {mlp_keys: '.*', cnn_keys: '$^'}
   decoder: {mlp_keys: '.*', cnn_keys: '$^'}
 
 dmc_vision:
-  steps: 1e6
   action_repeat: 2
   envs: 4
   train_ratio: 512
+  steps: 1e6
   video_pred_log: true
   encoder: {mlp_keys: '$^', cnn_keys: 'image'}
   decoder: {mlp_keys: '$^', cnn_keys: 'image'}
@@ -210,22 +227,51 @@ debug:
 gym_pendulum:
   use_sde: True     
   # If new replay buffer is used, set flag to true.
-  use_gym_env_with_replay_buffer: True  
+  use_replay_buffer: True  
   deterministic_run: True
-  seed: 200
-  
-  steps: 50000
+  seed: 500
+
+  # Environment
+  task: gym_Pendulum-v1
+  # Frequency of environment in training mode
+  dt_env_train: 0.1
+  # Frequency of environment in evaluation mode
+  dt_env_eval: 0.01
+  # Time limit for one episode in seconds in training mode
+  time_limit_train: 10
+  # Time limit for one episode in seconds in evaluation mode
+  time_limit_eval: 10
   envs: 1
   action_repeat: 1
-  train_ratio: 160
-  video_pred_log: True
-  capacity: 100
-  prefill: 5000
-  log_every: 1000
-  eval_every: 1000
 
-  task: gym_Pendulum-v1
+  # Settings for irregular case
+  # Enable/Disable irregularity 
+  irregular: False
+  # Minimum action hold
+  action_hold_min: 1
+  # Maximum action hold
+  action_hold_max: 2
 
+  # World model / rollout alignment
+  # Solver dt for for world model training
+  dt_wm: 0.1
+  # Sequence time for world model training (Time grid for WM training: [0, dt_wm, 2*dt_wm, ..., sequence_time]). Used when new replay buffer is used 
+  sequence_time: 2.0
+  # Batch length is used as sequence length when original data set is used
+  batch_length: 20    
+
+  # Planning
+  # Solver dt for imagination
+  dt_planning: 0.01
+
+  # Time duration of one imagination step 
+  imagination_time: 0.1
+
+  # Imagination horizon defines the number of imagination steps 
+  # (Time grid for imagination: [0, imagination_time, 2*imagination_time, ..., imag_horizon*imagination_time])
+  imag_horizon: 15
+
+  # Model parameters
   encoder:
     mlp_keys: 'obs'
     cnn_keys: '$^'
@@ -253,49 +299,23 @@ gym_pendulum:
     vector_dist: symlog_mse  
     outscale: 1.0
 
-  # Model parameters
   dyn_stoch: 16
   dyn_deter: 16
   dyn_discrete: False 
-  model_lr: 5e-4
-  grad_clip: 10.0  
   kl_free: 1.0        
   dyn_scale: 1.0        
-  rep_scale: 0.1            
-  
-  # Frequency of environment in training mode
-  dt_env_train: 0.1
-  # Time limit for one episode in seconds in training mode
-  time_limit_train: 10
-  # Frequency of environment in evaluation mode
-  dt_env_eval: 0.01
-  # Time limit for one episode in seconds in evaluation mode
-  time_limit_eval: 10
+  rep_scale: 0.1
 
-  # Solver dt for for world model training
-  dt_wm: 0.1
-  # Sequence time for world model training (Time grid for WM training: [0, dt_wm, 2*dt_wm, ..., sequence_time]). Used when new replay buffer is used 
-  sequence_time: 2.0
+  # Training
+  steps: 50000
+  train_ratio: 160
+  model_lr: 5e-4
+  grad_clip: 10.0  
+  video_pred_log: True
+  capacity: 100
+  prefill: 5000
+  log_every: 1000
+  eval_every: 1000
 
-  # Solver dt for imagination
-  dt_planning: 0.1
-
-  # Time duration of one imagination step 
-  imagination_time: 0.1
-
-  # Imagination horizon defines the number of imagination steps 
-  # (Time grid for imagination: [0, imagination_time, 2*imagination_time, ..., imag_horizon*imagination_time])
-  imag_horizon: 15
-
-  # Batch length is used as sequence length when original data set is used
-  batch_length: 20    
-
-  # Settings for irregular case
-  # Enable/Disable irregularity 
-  irregular: False
-  # Minimum action hold
-  action_hold_min: 1
-  # Maximum action hold
-  action_hold_max: 2
   # Enable/Disable Subsampling
   subsampling_enabled: False
