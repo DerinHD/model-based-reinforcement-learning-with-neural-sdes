@@ -195,6 +195,8 @@ def simulate_with_new_replaybuffer(
         
         # Code modification
         # Parse current time in environment and us reset timer for reset handling. Also check if training or evaluation mode for time handling in agent.
+        # TODO: If environment times are misaligned, this can cause problems. 
+            # We assume that all environments have the same time axis and that time is reset to 0 after done.
         action, agent_state, reset_time = agent(obs, done, envs[0].unwrapped.get_current_time(), reset_time, agent_state, training=not is_eval)
 
         if isinstance(action, dict):
@@ -342,6 +344,8 @@ def simulate_with_old_dataset(
         # Code modification
         # Reset handling is time-based for environments that provide a time axis.
         if "time" in obs:
+            # TODO: If environment times are misaligned, this can cause problems. 
+            # We assume that all environments have the same time axis and that time is reset to 0 after done.
             current_count = float(obs["time"][0])
             current_reset_time = reset_time
         else:

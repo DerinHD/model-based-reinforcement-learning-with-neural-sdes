@@ -139,6 +139,9 @@ class Dreamer(nn.Module):
         # - batch_length for original dataset
         # - reset_time for time-based rollouts
         # The variable sequence_count_step is either a time or a step counter
+        if self._config.use_sde and reset_time is not None and reset_time <= 0.0:
+            reset_time = self._config.sequence_time
+
         if state is None: 
             latent = action = None
         elif self._config.use_sde and reset_time is not None and sequence_count_step >= reset_time:
