@@ -552,12 +552,21 @@ class ImagBehavior(nn.Module):
             and use_closed_loop_controller
             and self._config.dt_planning < self._config.imagination_time
         )
+        if use_closed_loop_control and self._config.imag_gradient != "dynamics":
+            raise NotImplementedError(
+                "Closed-loop planning within an imagination step is "
+                "currently only supported for imag_gradient='dynamics'."
+            )
 
         def step(prev, _):
             state, _, _ = prev
             feat = dynamics.get_feat(state)
             inp = feat.detach()
-            action = policy(inp).sample()
+            policy_dist = policy(inp)
+            if use_stochastic_policy_during_planning:
+                action = policy_dist.sample()
+            else:
+                action = policy_dist.mode()
 
             # Code modification:
             # The latent SDE interface includes additional parameters for img_step method (e.g. dt)

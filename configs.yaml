@@ -266,11 +266,11 @@ gym_pendulum:
 
   # Planning
   # Solver dt for imagination
-  dt_planning: 0.01
+  dt_planning: 0.1
   # Enable/Disable closed-loop controller usage within one imagination step
   use_closed_loop_controller_during_planning: True
   # If closed-loop controller is used during planning, choose stochastic or deterministic actions
-  use_stochastic_policy_during_planning: True
+  use_stochastic_policy_during_planning: False
 
   # Time duration of one imagination step 
   imagination_time: 0.1
