@@ -578,6 +578,7 @@ class ImagBehavior(nn.Module):
                     imagination_time=self._config.imagination_time,
                     controller=policy if use_closed_loop_control else None,
                     use_stochastic_controller=use_stochastic_policy_during_planning,
+                    initial_controller_action=action if use_closed_loop_control else None,
                 )
             else:
                 succ = dynamics.img_step(state, action)

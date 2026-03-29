@@ -169,6 +169,7 @@ class ControlledLatentSDE(nn.Module):
         # If closed-loop controller is used for imagination, it needs to be assigned 
         self.controller = None
         self.use_stochastic_controller = True
+        self.initial_controller_action = None
 
         self.energy_preserving = energy_preserving_enabled
 
@@ -198,11 +199,15 @@ class ControlledLatentSDE(nn.Module):
         self.time_steps, self.embeddings, self.actions = ctx
 
     def set_controller(
-        self, controller: nn.Module, use_stochastic_policy: bool = True
+        self,
+        controller: nn.Module,
+        use_stochastic_policy: bool = True,
+        initial_action: torch.Tensor = None,
     ):
         """Set closed-loop controller"""
         self.controller = controller
         self.use_stochastic_controller = use_stochastic_policy
+        self.initial_controller_action = initial_action
 
     def h(self, t, y):
         """Prior drift 
@@ -226,11 +231,15 @@ class ControlledLatentSDE(nn.Module):
         # Check if closed-loop controller is available.
         # If not, use contexts
         if self.controller is not None:
-            policy = self.controller(y)
-            if self.use_stochastic_controller:
-                action = policy.sample()  # [B, act_dim]
+            if self.initial_controller_action is not None:
+                action = self.initial_controller_action
+                self.initial_controller_action = None
             else:
-                action = policy.mode()  # [B, act_dim]
+                policy = self.controller(y)
+                if self.use_stochastic_controller:
+                    action = policy.sample()  # [B, act_dim]
+                else:
+                    action = policy.mode()  # [B, act_dim]
         else:
             # Determine the time step for the action that is applied at the latent state y
             # Right index is used for search sorted since Dreamer stores the actions with a shift:
