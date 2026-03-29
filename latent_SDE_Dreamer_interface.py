@@ -363,6 +363,7 @@ class LatentSDEDreamerInterface(nn.Module):
             controller,
             use_stochastic_policy=use_stochastic_controller,
             initial_action=initial_controller_action,
+            initial_action_time=ts[0],
         )
 
         try:

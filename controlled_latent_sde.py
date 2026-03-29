@@ -170,6 +170,7 @@ class ControlledLatentSDE(nn.Module):
         self.controller = None
         self.use_stochastic_controller = True
         self.initial_controller_action = None
+        self.initial_controller_time = None
 
         self.energy_preserving = energy_preserving_enabled
 
@@ -203,11 +204,13 @@ class ControlledLatentSDE(nn.Module):
         controller: nn.Module,
         use_stochastic_policy: bool = True,
         initial_action: torch.Tensor = None,
+        initial_action_time: torch.Tensor = None,
     ):
         """Set closed-loop controller"""
         self.controller = controller
         self.use_stochastic_controller = use_stochastic_policy
         self.initial_controller_action = initial_action
+        self.initial_controller_time = initial_action_time
 
     def h(self, t, y):
         """Prior drift 
@@ -232,8 +235,26 @@ class ControlledLatentSDE(nn.Module):
         # If not, use contexts
         if self.controller is not None:
             if self.initial_controller_action is not None:
-                action = self.initial_controller_action
-                self.initial_controller_action = None
+                use_initial_action = True
+                if self.initial_controller_time is not None:
+                    use_initial_action = bool(
+                        torch.isclose(
+                            t,
+                            self.initial_controller_time,
+                            rtol=0.0,
+                            atol=1e-8,
+                        )
+                    )
+                if use_initial_action:
+                    action = self.initial_controller_action
+                else:
+                    self.initial_controller_action = None
+                    self.initial_controller_time = None
+                    policy = self.controller(y)
+                    if self.use_stochastic_controller:
+                        action = policy.sample()  # [B, act_dim]
+                    else:
+                        action = policy.mode()  # [B, act_dim]
             else:
                 policy = self.controller(y)
                 if self.use_stochastic_controller:
