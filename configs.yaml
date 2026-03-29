@@ -68,6 +68,10 @@ defaults:
   # Planning
   # Solver dt for imagination
   dt_planning: 0.05
+  # Enable/Disable closed-loop controller usage within one imagination step
+  use_closed_loop_controller_during_planning: True
+  # If closed-loop controller is used during planning, choose stochastic or deterministic actions
+  use_stochastic_policy_during_planning: True
   # Time duration of one imagination step
   imagination_time: 0.05
   imag_horizon: 15
@@ -229,7 +233,7 @@ gym_pendulum:
   # If new replay buffer is used, set flag to true.
   use_replay_buffer: True  
   deterministic_run: True
-  seed: 500
+  seed: 300
 
   # Environment
   task: gym_Pendulum-v1
@@ -263,6 +267,10 @@ gym_pendulum:
   # Planning
   # Solver dt for imagination
   dt_planning: 0.01
+  # Enable/Disable closed-loop controller usage within one imagination step
+  use_closed_loop_controller_during_planning: True
+  # If closed-loop controller is used during planning, choose stochastic or deterministic actions
+  use_stochastic_policy_during_planning: True
 
   # Time duration of one imagination step 
   imagination_time: 0.1

@@ -541,15 +541,17 @@ class ImagBehavior(nn.Module):
         dynamics = self._world_model.dynamics
         flatten = lambda x: x.reshape([-1] + list(x.shape[2:]))
         start = {k: flatten(v) for k, v in start.items()}
+        use_closed_loop_controller = getattr(
+            self._config, "use_closed_loop_controller_during_planning", True
+        )
+        use_stochastic_policy_during_planning = getattr(
+            self._config, "use_stochastic_policy_during_planning", True
+        )
         use_closed_loop_control = (
             self._config.use_sde
+            and use_closed_loop_controller
             and self._config.dt_planning < self._config.imagination_time
         )
-        if use_closed_loop_control and self._config.imag_gradient != "dynamics":
-            raise NotImplementedError(
-                "Closed-loop planning within an imagination step is "
-                "currently only supported for imag_gradient='dynamics'."
-            )
 
         def step(prev, _):
             state, _, _ = prev
@@ -566,6 +568,7 @@ class ImagBehavior(nn.Module):
                     dt_planning=self._config.dt_planning,
                     imagination_time=self._config.imagination_time,
                     controller=policy if use_closed_loop_control else None,
+                    use_stochastic_controller=use_stochastic_policy_during_planning,
                 )
             else:
                 succ = dynamics.img_step(state, action)

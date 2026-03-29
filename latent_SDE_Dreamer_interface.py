@@ -304,7 +304,8 @@ class LatentSDEDreamerInterface(nn.Module):
                  prev_action: torch.Tensor, 
                  imagination_time: float, 
                  dt_planning: float,
-                 controller=None):
+                 controller=None,
+                 use_stochastic_controller: bool = True):
         """Dreamer Interface: img_step function.
         
         This function is used by the world model to perform imagination steps during the rollout.
@@ -324,6 +325,9 @@ class LatentSDEDreamerInterface(nn.Module):
             optional closed-loop controller that is queried during the SDE
             integration. This enables multiple control decisions inside one
             imagination step while rewards stay on the defined time grid.
+        use_stochastic_controller:
+            flag whether the closed-loop controller samples stochastically or uses
+            its deterministic mode during planning.
 
         Returns:
         --------
@@ -351,7 +355,9 @@ class LatentSDEDreamerInterface(nn.Module):
 
         # Store contexts in latent SDE model
         self.model.contextualize((ts, ctx_dummy, acts_pair))
-        self.model.set_controller(controller)
+        self.model.set_controller(
+            controller, use_stochastic_policy=use_stochastic_controller
+        )
 
         try:
             # Perform SDE integration for the time interval
