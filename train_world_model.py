@@ -390,10 +390,12 @@ if __name__ == '__main__':
 
                 #  8.3 Compute posterior over the entire sequence using observe method from dynamics model
                 if config.use_sde:
-                    posterior, _ = world_model.dynamics.observe(embed=embed, 
-                                                           action=actions, 
-                                                           dt=config.dt,
-                                                           times=times)
+                    posterior, _ = world_model.dynamics.observe(
+                        embed=embed,
+                        action=actions,
+                        times=times,
+                        dt_wm=config.dt_wm,
+                    )
                 else:
                     posterior, _ = world_model.dynamics.observe(embed=embed, action=actions, is_first=is_first)
 
@@ -415,7 +417,12 @@ if __name__ == '__main__':
 
                 # 8.4 Compute prior over the entire sequence
                 if config.use_sde:
-                    prior = world_model.dynamics.imagine_with_action(steps, init, times, dt=config.dt)
+                    prior = world_model.dynamics.imagine_with_action(
+                        steps,
+                        init,
+                        times,
+                        dt_wm=config.dt_wm,
+                    )
                 else:
                     prior = world_model.dynamics.imagine_with_action(steps, init)
 
@@ -469,7 +476,7 @@ if __name__ == '__main__':
                             embed= embed_t,
                             is_first = is_first_t,
                             current_time = time_t,
-                            dt = config.dt
+                            dt = config.dt_wm
                         )
                     else:
                         posterior_per_step_state, _ = world_model.dynamics.obs_step(
@@ -506,7 +513,12 @@ if __name__ == '__main__':
                     imagination_time = (times[:, t + 1] - times[:, t])[0] 
                     #print(times)
                     if config.use_sde:
-                        prior_per_step_state = world_model.dynamics.img_step(prior_per_step_state, action_t, imagination_time=imagination_time, dt=config.dt)
+                        prior_per_step_state = world_model.dynamics.img_step(
+                            prior_per_step_state,
+                            action_t,
+                            imagination_time=imagination_time,
+                            dt_planning=config.dt_planning,
+                        )
                     else:
                         prior_per_step_state = world_model.dynamics.img_step(prior_per_step_state, action_t)
 

@@ -35,7 +35,17 @@ class LatentSDEDreamerInterface(nn.Module):
     device: 
         device on which model runs    
     """
-    def __init__(self, deter_dim:int, stoch_dim:int, act_dim:int, embed_dim:int, hidden_dim:int, device="cuda", solver="euler"):
+    def __init__(
+        self,
+        deter_dim:int,
+        stoch_dim:int,
+        act_dim:int,
+        embed_dim:int,
+        hidden_dim:int,
+        device="cuda",
+        solver="euler",
+        use_replay_buffer: bool = False,
+    ):
         super().__init__()
         from controlled_latent_sde import ControlledLatentSDE
         """Docstring for __init__
@@ -61,6 +71,7 @@ class LatentSDEDreamerInterface(nn.Module):
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim
         self.device = device
+        self.use_replay_buffer = use_replay_buffer
         print(f"Using {solver} solver for SDE integration.")
         self.solver = solver
         
@@ -137,14 +148,29 @@ class LatentSDEDreamerInterface(nn.Module):
         embed_transposed = embed.transpose(0, 1).contiguous()   # [T,B,E]
         acts_transposed  = action.transpose(0, 1).contiguous()  # [T,B,A]
 
-        # For regularly sampled data, time grids can be different since the environments are time-invariant. 
-        # For irregularly sampled data, we will use the new data set structure by the class Replay Buffer where all 
-        # sequences of a batch have the same time grid.
-        # Therefore, we can just take the first time grid.
-
-        #TODO: Only used for experiment with regularly sampled data. For irregularly sampled data, use actual time data
-        ts = torch.arange(T, device=device) * dt_wm 
-        #ts = times[0] 
+        if self.use_replay_buffer:
+            ts = times[0].to(device)
+            if not torch.allclose(
+                times,
+                ts.unsqueeze(0).expand_as(times),
+                rtol=1e-5,
+                atol=1e-6,
+            ):
+                raise ValueError(
+                    "Replay-buffer batches are expected to share the same time grid."
+                )
+        else: 
+            relative_times = times - times[:, :1]
+            ts = relative_times[0].to(device)
+            if not torch.allclose(
+                relative_times,
+                ts.unsqueeze(0).expand_as(relative_times),
+                rtol=1e-5,
+                atol=1e-4,
+            ):
+                raise ValueError(
+                    "Old-dataset batches are expected to share the same relative time grid."
+                )
 
         # Compute initial posterior by the initial method 
         y0_prior, y0_post, (p_mean0, p_std0, q_mean0, q_std0) = self.model.initial(B, embed_transposed[0])
@@ -258,11 +284,9 @@ class LatentSDEDreamerInterface(nn.Module):
             # Get current time
             t_curr = current_time[b]
 
-            # Stack times to define the time grid
-
-            #TODO: Only used for experiment with regularly sampled data. For irregularly sampled data, use actual time data
-            ts = torch.tensor([0, dt], device=embed.device)
-            # ts = torch.stack([t_prev, t_curr])
+            # Use the actual observation times as the outer integration interval.
+            # The solver step size dt remains an internal integration substep.
+            ts = torch.stack([t_prev, t_curr]).to(embed.device)
 
             y_prev = y_prev_all[b:b+1]
 
@@ -391,7 +415,7 @@ class LatentSDEDreamerInterface(nn.Module):
                             actions: torch.Tensor, 
                             init_state: dict, 
                             times: torch.tensor, 
-                            dt:float):
+                            dt_wm: float):
         """Dreamer interface:  imagine_with_action function.
 
         This function is just used for evaluating the performance of the world model in terms 
@@ -405,7 +429,7 @@ class LatentSDEDreamerInterface(nn.Module):
             Initial state to start rollout
         times: torch.Tensor
             Time steps of the episode
-        dt: float
+        dt_wm: float
             integration step size for the Euler solver
 
         Returns:
@@ -434,7 +458,7 @@ class LatentSDEDreamerInterface(nn.Module):
             y0,
             ts,
             method=self.solver,
-            dt=dt,
+            dt=dt_wm,
             names={"drift": "h", "diffusion": "g"},
             logqp=False,
         )  

@@ -160,11 +160,14 @@ class Dreamer(nn.Module):
         # Code modification:
         # obs_step method of latent SDE model includes dt and current time of observation as parameters
         if self._config.use_sde:
-            # for dt we either use dt_wm (training mode) or dt_env_eval (evaluation mode)
-            if training:
-                latent = self._wm.dynamics.obs_step(latent, action, embed, obs["is_first"], dt=self._config.dt_wm, current_time=obs["time"])
-            else:
-                latent = self._wm.dynamics.obs_step(latent, action, embed, obs["is_first"], dt=self._config.dt_env_eval, current_time=obs["time"])
+            latent = self._wm.dynamics.obs_step(
+                latent,
+                action,
+                embed,
+                obs["is_first"],
+                dt=self._config.dt_wm,
+                current_time=obs["time"],
+            )
         else:
             latent, _ = self._wm.dynamics.obs_step(latent, action, embed, obs["is_first"])
 
@@ -365,6 +368,17 @@ def make_env(config, mode, id):
 def main(config):
     print("Main function.--------------------------------")
     suite, _ = config.task.split("_", 1)
+    if config.use_replay_buffer and config.envs != 1:
+        raise ValueError(
+            "The new replay buffer currently only supports envs=1. "
+            "Multi-environment support requires aligned per-environment time grids "
+            "and reset handling."
+        )
+    if not config.use_replay_buffer and getattr(config, "irregular", False):
+        raise ValueError(
+            "The old dataset path currently requires irregular=False. "
+            "Use the new replay buffer for irregular time grids."
+        )
     if (
         config.use_sde
         and not config.use_replay_buffer

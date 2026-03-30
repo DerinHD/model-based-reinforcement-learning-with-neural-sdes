@@ -171,7 +171,10 @@ def simulate_with_new_replaybuffer(
             indices = [index for index, d in enumerate(done) if d]
 
             # Code modification:
-            # Initialize episode with new time grid if batch is complete
+            # Initialize episode with new time grid if batch is complete.
+            # TODO: Support envs > 1 for the new replay buffer by synchronizing
+            # time grids across environments or by storing batches with
+            # per-environment time grids and reset handling.
             for i in indices:
                 if (replay_buffer == None or replay_buffer.batch_completed):
                     envs[i].unwrapped.make_time_grid()        
