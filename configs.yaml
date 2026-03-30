@@ -44,9 +44,9 @@ defaults:
   task: 'dmc_walker_walk'
   size: [64, 64]
   action_repeat: 2
-  # Frequency of environment in training mode
+  # Frequency of environment in training mode. Time grid for environment interaction in training mode: [0, dt_env_train, 2*dt_env_train, ...]
   dt_env_train: 0.05
-  # Frequency of environment in evaluation mode
+  # Frequency of environment in evaluation mode. Time grid for environment interaction in evaluation mode: [0, dt_env_eval, 2*dt_env_eval, ...]
   dt_env_eval: 0.025
   # Time limit for one episode in seconds in training mode
   time_limit_train: 25
@@ -59,14 +59,14 @@ defaults:
   reward_EMA: True
 
   # World model / rollout alignment
-  # Solver dt for for world model training
+  # Internal solver step for world model training.
   dt_wm: 0.0125
   # Sequence time for world model training (Time grid for WM training: [0, dt_wm, 2*dt_wm, ..., sequence_time]). Used when new replay buffer is used
   sequence_time: 2.5
   batch_length: 50
 
   # Planning
-  # Solver dt for imagination
+  # Internal solver dt for planning.
   dt_planning: 0.05
   # Enable/Disable closed-loop controller usage within one imagination step
   use_closed_loop_controller_during_planning: True
@@ -74,6 +74,7 @@ defaults:
   use_stochastic_policy_during_planning: True
   # Time duration of one imagination step
   imagination_time: 0.05
+  # Imagination horizon defines the number of imagination steps
   imag_horizon: 15
 
   # Model
@@ -237,9 +238,9 @@ gym_pendulum:
 
   # Environment
   task: gym_Pendulum-v1
-  # Frequency of environment in training mode
+  # Frequency of environment in training mode. Time grid for environment interaction in training mode: [0, dt_env_train, 2*dt_env_train, ...]
   dt_env_train: 0.1
-  # Frequency of environment in evaluation mode
+  # Frequency of environment in evaluation mode. Time grid for environment interaction in evaluation mode: [0, dt_env_eval, 2*dt_env_eval, ...]
   dt_env_eval: 0.01
   # Time limit for one episode in seconds in training mode
   time_limit_train: 10
@@ -257,7 +258,7 @@ gym_pendulum:
   action_hold_max: 2
 
   # World model / rollout alignment
-  # Solver dt for for world model training
+  # Internal solver step for world model training. 
   dt_wm: 0.1
   # Sequence time for world model training (Time grid for WM training: [0, dt_wm, 2*dt_wm, ..., sequence_time]). Used when new replay buffer is used 
   sequence_time: 2.0
@@ -265,7 +266,7 @@ gym_pendulum:
   batch_length: 20    
 
   # Planning
-  # Solver dt for imagination
+  # Internal solver dt for planning.
   dt_planning: 0.1
   # Enable/Disable closed-loop controller usage within one imagination step
   use_closed_loop_controller_during_planning: True
