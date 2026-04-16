@@ -10,7 +10,9 @@
 # - Enable new replay buffer: -- use_replay_buffer: True
 # - Specify number of action holds by action_hold_min and action_hold_max
 # - Specify frequency of environment
-# - Enable subsampling with the flag subsampling
+# - Enable subsampling with the flag subsampling_enabled
+# - Enable energy-preserving stabilization with the flag energy_preserving_enabled
+# - Optionally configure the subsampling time-gap bounds
 # - Run only one environment and no parallel environments since this case was not tested
 # Note: The irregular setting was not tested on other gym environments. Therefore, the code may crash.
 # ------
@@ -19,6 +21,7 @@
 defaults:
   use_replay_buffer: False
   use_sde: True
+  energy_preserving_enabled: False
 
   logdir: null
   traindir: null
@@ -26,7 +29,7 @@ defaults:
   offline_traindir: ''
   offline_evaldir: ''
   seed: 0
-  deterministic_run: False
+  deterministic_run: True
   steps: 1e6
   parallel: False
   eval_every: 1e4
@@ -45,7 +48,7 @@ defaults:
   size: [64, 64]
   action_repeat: 2
   # Frequency of environment in training mode. Time grid for environment interaction in training mode: [0, dt_env_train, 2*dt_env_train, ...]
-  dt_env_train: 0.05
+  dt_env_train: 0.01
   # Frequency of environment in evaluation mode. Time grid for environment interaction in evaluation mode: [0, dt_env_eval, 2*dt_env_eval, ...]
   dt_env_eval: 0.025
   # Time limit for one episode in seconds in training mode
@@ -64,6 +67,20 @@ defaults:
   # Sequence time for world model training (Time grid for WM training: [0, dt_wm, 2*dt_wm, ..., sequence_time]). Used when new replay buffer is used
   sequence_time: 2.5
   batch_length: 50
+  # Enable/Disable subsampling on replay-buffer sequences
+  subsampling_enabled: False
+  # Minimum time gap between two retained time points during subsampling
+  subsampling_time_gap_min: 0.01
+  # Maximum time gap between two retained time points during subsampling
+  subsampling_time_gap_max: 0.5
+  # Minimum action hold in training mode for gym environments
+  action_hold_min_train: 5
+  # Maximum action hold in training mode for gym environments
+  action_hold_max_train: 5
+  # Minimum action hold in evaluation mode for gym environments
+  action_hold_min_eval: 1
+  # Maximum action hold in evaluation mode for gym environments
+  action_hold_max_eval: 1
 
   # Planning
   # Internal solver dt for planning.
@@ -230,55 +247,60 @@ debug:
   batch_length: 20
 
 gym_pendulum:
-  use_sde: True     
+  use_sde: False     
+  energy_preserving_enabled: True
   # If new replay buffer is used, set flag to true.
   use_replay_buffer: True  
   deterministic_run: True
-  seed: 300
+  seed: 796
 
   # Environment
   task: gym_Pendulum-v1
   # Frequency of environment in training mode. Time grid for environment interaction in training mode: [0, dt_env_train, 2*dt_env_train, ...]
-  dt_env_train: 0.1
+  dt_env_train: 0.02
   # Frequency of environment in evaluation mode. Time grid for environment interaction in evaluation mode: [0, dt_env_eval, 2*dt_env_eval, ...]
-  dt_env_eval: 0.01
+  dt_env_eval: 0.02
   # Time limit for one episode in seconds in training mode
   time_limit_train: 10
   # Time limit for one episode in seconds in evaluation mode
   time_limit_eval: 10
   envs: 1
   action_repeat: 1
-
+  
   # Settings for irregular case
   # Enable/Disable irregularity 
-  irregular: False
-  # Minimum action hold
-  action_hold_min: 1
-  # Maximum action hold
-  action_hold_max: 2
+  irregular: True
+  # Minimum action hold in training mode
+  action_hold_min_train: 1
+  # Maximum action hold in training mode
+  action_hold_max_train: 20
+  # Minimum action hold in evaluation mode
+  action_hold_min_eval: 1
+  # Maximum action hold in evaluation mode
+  action_hold_max_eval: 1
 
   # World model / rollout alignment
   # Internal solver step for world model training. 
-  dt_wm: 0.1
+  dt_wm: 0.02
   # Sequence time for world model training (Time grid for WM training: [0, dt_wm, 2*dt_wm, ..., sequence_time]). Used when new replay buffer is used 
-  sequence_time: 2.0
+  sequence_time: 1.0
   # Batch length is used as sequence length when original data set is used
-  batch_length: 20    
+  batch_length: 50
 
   # Planning
   # Internal solver dt for planning.
-  dt_planning: 0.1
+  dt_planning: 0.02
   # Enable/Disable closed-loop controller usage within one imagination step
-  use_closed_loop_controller_during_planning: True
+  use_closed_loop_controller_during_planning: False
   # If closed-loop controller is used during planning, choose stochastic or deterministic actions
   use_stochastic_policy_during_planning: False
 
   # Time duration of one imagination step 
-  imagination_time: 0.1
+  imagination_time: 0.02
 
   # Imagination horizon defines the number of imagination steps 
   # (Time grid for imagination: [0, imagination_time, 2*imagination_time, ..., imag_horizon*imagination_time])
-  imag_horizon: 15
+  imag_horizon: 30
 
   # Model parameters
   encoder:
@@ -291,7 +313,7 @@ gym_pendulum:
     minres: 4
     mlp_layers: 2
     mlp_units: 32
-    symlog_inputs: True  
+    symlog_inputs: False  
 
   decoder:
     mlp_keys: 'obs'
@@ -305,26 +327,30 @@ gym_pendulum:
     mlp_units: 128
     cnn_sigmoid: False
     image_dist: normal
-    vector_dist: symlog_mse  
+    vector_dist: normal  
     outscale: 1.0
 
-  dyn_stoch: 16
-  dyn_deter: 16
+  dyn_stoch: 32
+  dyn_deter: 32
   dyn_discrete: False 
   kl_free: 1.0        
   dyn_scale: 1.0        
   rep_scale: 0.1
 
   # Training
-  steps: 50000
+  steps: 2e5
   train_ratio: 160
   model_lr: 5e-4
   grad_clip: 10.0  
-  video_pred_log: True
+  video_pred_log: False
   capacity: 100
-  prefill: 5000
+  prefill: 10000
   log_every: 1000
   eval_every: 1000
 
-  # Enable/Disable Subsampling
+  # Enable/Disable subsampling on sampled replay-buffer sequences
   subsampling_enabled: False
+  # Minimum time gap between two time points during subsampling
+  subsampling_time_gap_min: 0.25
+  # Maximum time gap between two time points during subsampling
+  subsampling_time_gap_max: 0.8

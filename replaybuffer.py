@@ -215,7 +215,13 @@ class ReplayBuffer():
         # assign batch path list to dataset
         self._dataset = batch_paths
 
-    def _sample_batch_by_sequence_time(self, sequence_time: float, subsampling_enabled = False):
+    def _sample_batch_by_sequence_time(
+        self,
+        sequence_time: float,
+        subsampling_enabled=False,
+        subsampling_time_gap_min: float = 0.01,
+        subsampling_time_gap_max: float = 0.5,
+    ):
         """Sample batch of sequences by a specified sequence time.
 
         Parameters:
@@ -224,6 +230,10 @@ class ReplayBuffer():
             sequence time in seconds
         subsampling_enabled: bool
             flag to perform subsampling on the sampled sequence or not
+        subsampling_time_gap_min: float
+            minimum time gap between two time points during subsampling
+        subsampling_time_gap_max: float
+            maximum time gap between two time points during subsampling
 
         Returns:
         --------
@@ -232,6 +242,11 @@ class ReplayBuffer():
         """
         if len(self._dataset) == 0:
             raise ValueError("No batches available")
+        if subsampling_time_gap_min > subsampling_time_gap_max:
+            raise ValueError(
+                "subsampling_time_gap_min must be smaller than or equal to "
+                "subsampling_time_gap_max."
+            )
 
         # Determine random batch path
         path = np.random.choice(self._dataset) 
@@ -271,7 +286,11 @@ class ReplayBuffer():
 
         # Perform subsampling on sequences if enabled 
         if subsampling_enabled:
-            sequences = self._subsample_sequence(sequences)
+            sequences = self._subsample_sequence(
+                sequences,
+                time_gap_min=subsampling_time_gap_min,
+                time_gap_max=subsampling_time_gap_max,
+            )
         
         return sequences
     

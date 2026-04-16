@@ -83,7 +83,12 @@ class Dreamer(nn.Module):
                 # Code modification: 
                 # Check which data set is used
                 if self._config.use_replay_buffer:
-                    data = self._dataset._sample_batch_by_sequence_time(self._config.sequence_time, subsampling_enabled=self._config.subsampling_enabled) # different
+                    data = self._dataset._sample_batch_by_sequence_time(
+                        self._config.sequence_time,
+                        subsampling_enabled=self._config.subsampling_enabled,
+                        subsampling_time_gap_min=self._config.subsampling_time_gap_min,
+                        subsampling_time_gap_max=self._config.subsampling_time_gap_max,
+                    )
                 else:
                     data = next(self._dataset)
 
@@ -321,13 +326,24 @@ def make_env(config, mode, id):
     # Add gym environment to the environment lists
     elif suite == "gym":
         from envs.gymnasium import GymEnv
+
+        if mode == "train":
+            time_limit = config.time_limit_train
+            action_hold_min = config.action_hold_min_train
+            action_hold_max = config.action_hold_max_train
+        elif mode == "eval":
+            time_limit = config.time_limit_eval
+            action_hold_min = config.action_hold_min_eval
+            action_hold_max = config.action_hold_max_eval
+        else:
+            raise ValueError(f"Invalid mode: {mode}")
     
         env = GymEnv(name=task, 
                      action_repeat=config.action_repeat, 
                      time_limit= config.time_limit_train if "train" in mode else config.time_limit_eval,
                      irregular=config.irregular,
-                     action_hold_min= config.action_hold_min,
-                     action_hold_max= config.action_hold_max,
+                     action_hold_min= action_hold_min,
+                     action_hold_max= action_hold_max,
                      seed = config.seed
         )
         if mode == "train":

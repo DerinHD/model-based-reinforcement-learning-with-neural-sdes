@@ -45,6 +45,7 @@ class LatentSDEDreamerInterface(nn.Module):
         device="cuda",
         solver="euler",
         use_replay_buffer: bool = False,
+        energy_preserving_enabled: bool = False,
     ):
         super().__init__()
         from controlled_latent_sde import ControlledLatentSDE
@@ -63,6 +64,8 @@ class LatentSDEDreamerInterface(nn.Module):
             dimension of hidden layers
         device:
             device on which model runs
+        energy_preserving_enabled: bool
+            flag whether energy-preserving drifts should be used
         """
 
         # Latent dimension is the concatenation of deterministic and stochastic state
@@ -81,6 +84,7 @@ class LatentSDEDreamerInterface(nn.Module):
             context_dim=embed_dim,
             act_dim=act_dim,
             hidden_dim=hidden_dim,
+            energy_preserving_enabled=energy_preserving_enabled,
         )
 
     def convert_to_dict(self, z):
