@@ -66,6 +66,7 @@ class WorldModel(nn.Module):
                 device=config.device,
                 solver=config.sde_solver,
                 use_replay_buffer=config.use_replay_buffer,
+                energy_preserving_enabled=config.energy_preserving_enabled,
             )
             feat_size = config.dyn_stoch + config.dyn_deter
 
