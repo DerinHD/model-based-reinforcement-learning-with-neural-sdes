@@ -384,9 +384,9 @@ def make_env(config, mode, id):
             time_limit = config.time_limit_eval
             action_hold_min = config.action_hold_min_eval
             action_hold_max = config.action_hold_max_eval
-            use_action_hold = False
-            observation_gap_min = getattr(config, "observation_gap_min_eval", 1)
-            observation_gap_max = getattr(config, "observation_gap_max_eval", 1)
+            use_action_hold = config.use_action_hold
+            observation_gap_min = config.observation_gap_min_eval
+            observation_gap_max = config.observation_gap_max_eval
         else:
             raise ValueError(f"Invalid mode: {mode}")
     
