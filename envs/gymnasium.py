@@ -8,7 +8,7 @@ class GymEnv(gym.Env):
     This class is used to define a custom environment compatible with the OpenAI Gymnasium library.
     The environment is assumed to be continuous meaning that the termination is specified by a time limit.
     Furthermore the environment allows to run an episode on a non-uniform time grid by using action holds which keep
-    an action constant for a specific number of steps => irregular decision times.
+    an action constant for a specific number of steps.
 
     Attributes:
     -----------
@@ -22,8 +22,8 @@ class GymEnv(gym.Env):
         duration of an episode in the environment
     _time: float 
         current time in environment
-    _irregular: bool
-        states if environment consists of irregular decision times or not
+    _use_action_hold: bool
+        states if action holds are enabled or not
     _action_hold_grid: 
         saves the current grid of action holds 
     _action_hold_grid_idx:
@@ -67,9 +67,11 @@ class GymEnv(gym.Env):
                  action_repeat: int = 1, 
                  time_limit: float = 10.0, 
                  seed: int = None, 
-                 irregular: bool = False,
+                 use_action_hold: bool = False,
                  action_hold_min: int = 1,
-                 action_hold_max: int = 2
+                 action_hold_max: int = 2,
+                 observation_gap_min: int = 1,
+                 observation_gap_max: int = 1
                  ):
         """Docstring for __init__
     
@@ -82,8 +84,8 @@ class GymEnv(gym.Env):
             duration of an episode in the environment specified in seconds
         seed: 
             seed id to allow deterministic episodes
-        irregular:
-            states if environment consists of irregular decision times or not
+        use_action_hold:
+            states if action holds are enabled or not
         action_hold_min:
             minimum number of action holds
         action_hold_max:
@@ -106,12 +108,17 @@ class GymEnv(gym.Env):
         self._repeat = action_repeat 
         self._time_limit = time_limit 
         self._time = 0.0  
-        self._irregular = irregular
+        self._use_action_hold = use_action_hold
 
         self._action_hold_grid = None 
         self._action_hold_grid_idx = 0 
         self._action_hold_min = action_hold_min
         self._action_hold_max = action_hold_max
+        self._observation_gap_grid = None
+        self._observation_gap_grid_idx = 0
+        self._observation_gap_min = observation_gap_min
+        self._observation_gap_max = observation_gap_max
+        self._steps_until_next_observation = 1
 
         # Check which environment is used since the frequency is defined differently for every environment
         if self._name == "Pendulum-v1":
@@ -154,26 +161,40 @@ class GymEnv(gym.Env):
         return self._time
 
     def make_time_grid(self):
-        """reconfigure action hold grid of environment
+        """Reconfigure action and observation gap grids."""
+        if self._use_action_hold:
+            self._action_hold_grid = self._make_hold_grid(
+                self._action_hold_min,
+                self._action_hold_max,
+            )
+        else:
+            self._action_hold_grid = None
 
-        A fixed grid of random action holds is generated and used when stepping in the environment.
-        """
-    
-        # Determine the maximum size of the action hold grid
-        max_steps = int(np.ceil(self._time_limit / (self._action_hold_min * self._physical_step_size ))) + 1
+        if self._observation_gap_min > 1 or self._observation_gap_max > 1:
+            self._observation_gap_grid = self._make_hold_grid(
+                self._observation_gap_min,
+                self._observation_gap_max,
+            )
+        else:
+            self._observation_gap_grid = None
 
-        # Generate a list of random action holds with size max_steps
-        n = np.random.randint(self._action_hold_min, self._action_hold_max + 1, size=max_steps)
+    def _make_hold_grid(self, hold_min: int, hold_max: int):
+        hold_min = max(int(hold_min), 1)
+        hold_max = max(int(hold_max), hold_min)
+        max_steps = int(np.ceil(self._time_limit / (hold_min * self._physical_step_size))) + 1
+        holds = np.random.randint(hold_min, hold_max + 1, size=max_steps)
+        cumulative_time = np.cumsum(holds * self._physical_step_size)
+        cutoff = np.searchsorted(cumulative_time, self._time_limit, side="right")
+        return holds[:cutoff + 1]
 
-        # Compute the cumulative sum to determine the current time in the grid 
-        t = np.cumsum(n * self._physical_step_size)
-        
-        # Cut off grid at the point where time limit was reached. Include the last action hold too 
-        # which exceeds the time limit
-        cutoff = np.searchsorted(t, self._time_limit, side="right")
+    def _schedule_next_observation(self):
+        if self._observation_gap_grid is None:
+            self._steps_until_next_observation = 1
+            return
 
-        # store final grid
-        self._action_hold_grid = n[:cutoff + 1]
+        idx = min(self._observation_gap_grid_idx, len(self._observation_gap_grid) - 1)
+        self._steps_until_next_observation = int(self._observation_gap_grid[idx])
+        self._observation_gap_grid_idx += 1
 
     @property
     def observation_space(self):
@@ -185,7 +206,8 @@ class GymEnv(gym.Env):
         # Dreamer expects a dictionary for the observation space
         return spaces.Dict({
             "obs": obs_space, 
-            "image": spaces.Box(0, 255, (64, 64, 3), dtype=np.uint8)  # dummy image space to be compatible with Dreamer
+            "image": spaces.Box(0, 255, (64, 64, 3), dtype=np.uint8),  # dummy image space to be compatible with Dreamer
+            "obs_valid": spaces.Box(0, 1, (), dtype=np.bool_),
         })
     
     @property
@@ -194,7 +216,13 @@ class GymEnv(gym.Env):
         """
         return self._env.action_space
 
-    def _wrap_obs(self, obs: np.ndarray, is_first: bool = False, is_terminal:bool=False):
+    def _wrap_obs(
+        self,
+        obs: np.ndarray,
+        is_first: bool = False,
+        is_terminal: bool = False,
+        obs_valid: bool = True,
+    ):
         """wrap observation with additional data such as the flags is_first and is_terminal
         and the current time of the observation
 
@@ -223,7 +251,8 @@ class GymEnv(gym.Env):
             "image": image,
             "is_first": is_first,
             "is_terminal": is_terminal,
-            "time": self._time
+            "time": self._time,
+            "obs_valid": np.bool_(obs_valid),
         }
     
     def reset(self, seed=None, options=None):
@@ -244,9 +273,8 @@ class GymEnv(gym.Env):
                 wrapped observation with is_first flag set to True
         """
 
-        # If action hold grid is None, create an initial grid. This ensures null exceptions
-        if self._action_hold_grid is None:
-            self.make_time_grid()
+        # Create fresh hold grids for each new episode.
+        self.make_time_grid()
 
         # If seed is given, parse to reset function
         if self.seed is not None:
@@ -259,9 +287,16 @@ class GymEnv(gym.Env):
 
         # Reset index identifier of dt grid
         self._action_hold_grid_idx = 0
+        self._observation_gap_grid_idx = 0
+        self._schedule_next_observation()
 
         # Wrap observation and set is_first flag to True
-        wrapped_observation = self._wrap_obs(obs, is_first=True, is_terminal=False)
+        wrapped_observation = self._wrap_obs(
+            obs,
+            is_first=True,
+            is_terminal=False,
+            obs_valid=True,
+        )
 
         return wrapped_observation
 
@@ -276,9 +311,9 @@ class GymEnv(gym.Env):
                 Action that is to step in the environment
         """
 
-        # Check if irregularity is enabled.
+        # Check if action holds are enabled.
         # If yes, use the action hold grid to determine the current action hold
-        if self._irregular:
+        if self._use_action_hold:
             n = int(self._action_hold_grid[self._action_hold_grid_idx])
             self._action_hold_grid_idx += 1
         else:
@@ -286,6 +321,7 @@ class GymEnv(gym.Env):
         
         # Store the elapsed time 
         elapsed = 0.0
+        steps_taken = 0
         # Store the last reward. This variable is used to skip rewards during the stepping process.
         last_reward = 0.0
         
@@ -299,6 +335,7 @@ class GymEnv(gym.Env):
             
             last_reward = reward
             elapsed += self._physical_step_size 
+            steps_taken += 1
 
             # End episode if time limit was reached
             if self._time + elapsed >= self._time_limit:
@@ -308,15 +345,25 @@ class GymEnv(gym.Env):
         # Update current time by the elapsed time 
         self._time += elapsed
 
+        obs_valid = True
+        if self._observation_gap_grid is not None:
+            self._steps_until_next_observation -= steps_taken
+            obs_valid = done or self._steps_until_next_observation <= 0
+            if obs_valid and not done:
+                self._schedule_next_observation()
+
+        agent_reward = float(last_reward) if obs_valid else 0.0
+
         # Wrap obswervation
         wrapped_obs = self._wrap_obs(
                             obs,
                             is_first=False,
                             is_terminal=done,
+                            obs_valid=obs_valid,
                         )
         
 
-        return wrapped_obs, last_reward, done, info
+        return wrapped_obs, agent_reward, done, info
 
     def close(self):
         """Close the environment.

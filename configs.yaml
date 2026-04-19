@@ -4,7 +4,7 @@
 # This ensures that the original dataset structure from Dreamer us used. 
 # Do not set the flag to true, because the new replay buffer was not tested on the DMC benchmarks. The code may crash if the flag is set to true.
 # ------
-# 2. To use irregular setting:
+# 2. To use action holds:
 # - Edit parameters of the gym_pendulum config
 # - Run the script with --config gym_Pendulum
 # - Enable new replay buffer: -- use_replay_buffer: True
@@ -14,7 +14,7 @@
 # - Enable energy-preserving stabilization with the flag energy_preserving_enabled
 # - Optionally configure the subsampling time-gap bounds
 # - Run only one environment and no parallel environments since this case was not tested
-# Note: The irregular setting was not tested on other gym environments. Therefore, the code may crash.
+# Note: The action-hold setting was not tested on other gym environments. Therefore, the code may crash.
 # ------
 # 3. To switch between the RSSM and latent neural SDE model, use the flag use_sde
 
@@ -64,6 +64,8 @@ defaults:
   # World model / rollout alignment
   # Internal solver step for world model training.
   dt_wm: 0.0125
+  # Enable/Disable manual latent-state resets during SDE interaction rollouts
+  enable_sde_state_reset: True
   # Sequence time for world model training (Time grid for WM training: [0, dt_wm, 2*dt_wm, ..., sequence_time]). Used when new replay buffer is used
   sequence_time: 2.5
   batch_length: 50
@@ -81,6 +83,10 @@ defaults:
   action_hold_min_eval: 1
   # Maximum action hold in evaluation mode for gym environments
   action_hold_max_eval: 1
+  # Minimum number of fine-grid control steps between two available observations in evaluation
+  observation_gap_min_eval: 1
+  # Maximum number of fine-grid control steps between two available observations in evaluation
+  observation_gap_max_eval: 1
 
   # Planning
   # Internal solver dt for planning.
@@ -247,12 +253,14 @@ debug:
   batch_length: 20
 
 gym_pendulum:
-  use_sde: False     
+  use_sde: True     
+  # Enable/Disable manual latent-state resets during SDE interaction rollouts
+  enable_sde_state_reset: False
   energy_preserving_enabled: True
   # If new replay buffer is used, set flag to true.
   use_replay_buffer: True  
   deterministic_run: True
-  seed: 796
+  seed: 1
 
   # Environment
   task: gym_Pendulum-v1
@@ -267,40 +275,44 @@ gym_pendulum:
   envs: 1
   action_repeat: 1
   
-  # Settings for irregular case
-  # Enable/Disable irregularity 
-  irregular: True
+  # Settings for action holds
+  # Enable/Disable action holds
+  use_action_hold: True
   # Minimum action hold in training mode
-  action_hold_min_train: 1
+  action_hold_min_train: 10
   # Maximum action hold in training mode
-  action_hold_max_train: 20
+  action_hold_max_train: 10
   # Minimum action hold in evaluation mode
   action_hold_min_eval: 1
   # Maximum action hold in evaluation mode
   action_hold_max_eval: 1
+  # Minimum number of control steps between two available observations in evaluation
+  observation_gap_min_eval: 10
+  # Maximum number of control steps between two available observations in evaluation
+  observation_gap_max_eval: 10
 
   # World model / rollout alignment
   # Internal solver step for world model training. 
   dt_wm: 0.02
   # Sequence time for world model training (Time grid for WM training: [0, dt_wm, 2*dt_wm, ..., sequence_time]). Used when new replay buffer is used 
-  sequence_time: 1.0
+  sequence_time: 2.0
   # Batch length is used as sequence length when original data set is used
-  batch_length: 50
+  batch_length: 100
 
   # Planning
   # Internal solver dt for planning.
   dt_planning: 0.02
   # Enable/Disable closed-loop controller usage within one imagination step
-  use_closed_loop_controller_during_planning: False
+  use_closed_loop_controller_during_planning: True
   # If closed-loop controller is used during planning, choose stochastic or deterministic actions
   use_stochastic_policy_during_planning: False
 
   # Time duration of one imagination step 
-  imagination_time: 0.02
+  imagination_time: 0.2
 
   # Imagination horizon defines the number of imagination steps 
   # (Time grid for imagination: [0, imagination_time, 2*imagination_time, ..., imag_horizon*imagination_time])
-  imag_horizon: 30
+  imag_horizon: 10
 
   # Model parameters
   encoder:

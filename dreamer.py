@@ -144,37 +144,83 @@ class Dreamer(nn.Module):
         # - batch_length for original dataset
         # - reset_time for time-based rollouts
         # The variable sequence_count_step is either a time or a step counter
-        if self._config.use_sde and reset_time is not None and reset_time <= 0.0:
+        if (
+            self._config.use_sde
+            and self._config.enable_sde_state_reset
+            and reset_time is not None
+            and reset_time <= 0.0
+        ):
             reset_time = self._config.sequence_time
 
         if state is None: 
             latent = action = None
-        elif self._config.use_sde and reset_time is not None and sequence_count_step >= reset_time:
+        elif (
+            self._config.use_sde
+            and self._config.enable_sde_state_reset
+            and reset_time is not None
+            and sequence_count_step >= reset_time
+        ):
             # print("Resetting state", "at time: ", sequence_count_step)
             latent = action = None
             reset_time += self._config.sequence_time
-        elif self._config.use_sde and sequence_count_step % self._config.batch_length == 0:
+        elif (
+            self._config.use_sde
+            and self._config.enable_sde_state_reset
+            and sequence_count_step % self._config.batch_length == 0
+        ):
             # print("Resetting state", "at step", sequence_count_step)
             latent = action = None
         else:
             latent, action = state
 
         obs = self._wm.preprocess(obs)
-        embed = self._wm.encoder(obs)
-
-        # Code modification:
-        # obs_step method of latent SDE model includes dt and current time of observation as parameters
-        if self._config.use_sde:
-            latent = self._wm.dynamics.obs_step(
-                latent,
-                action,
-                embed,
-                obs["is_first"],
-                dt=self._config.dt_wm,
-                current_time=obs["time"],
+        obs_valid = torch.ones_like(obs["is_first"], dtype=torch.bool)
+        if "obs_valid" in obs:
+            obs_valid = obs["obs_valid"].bool()
+        if obs_valid.numel() > 1 and not torch.all(obs_valid == obs_valid[0]):
+            raise NotImplementedError(
+                "You are using parallel environments with inhomogeneous observation validity. This is currently not supported. "
             )
+        use_posterior = latent is None or bool(
+            torch.any(obs["is_first"].bool()) or torch.any(obs_valid)
+        )
+
+        if use_posterior:
+            embed = self._wm.encoder(obs)
+
+            # Code modification:
+            # obs_step method of latent SDE model includes dt and current time of observation as parameters
+            if self._config.use_sde:
+                latent = self._wm.dynamics.obs_step(
+                    latent,
+                    action,
+                    embed,
+                    obs["is_first"],
+                    dt=self._config.dt_wm,
+                    current_time=obs["time"],
+                )
+            else:
+                latent, _ = self._wm.dynamics.obs_step(
+                    latent,
+                    action,
+                    embed,
+                    obs["is_first"],
+                )
         else:
-            latent, _ = self._wm.dynamics.obs_step(latent, action, embed, obs["is_first"])
+            if self._config.use_sde:
+                imagination_time = (
+                    self._config.dt_env_train
+                    if training
+                    else self._config.dt_env_eval
+                )
+                latent = self._wm.dynamics.img_step(
+                    latent,
+                    action,
+                    imagination_time=imagination_time,
+                    dt_planning=self._config.dt_planning,
+                )
+            else:
+                latent = self._wm.dynamics.img_step(latent, action)
 
         if self._config.eval_state_mean:
             latent["stoch"] = latent["mean"]
@@ -331,19 +377,27 @@ def make_env(config, mode, id):
             time_limit = config.time_limit_train
             action_hold_min = config.action_hold_min_train
             action_hold_max = config.action_hold_max_train
+            use_action_hold = config.use_action_hold
+            observation_gap_min = 1
+            observation_gap_max = 1
         elif mode == "eval":
             time_limit = config.time_limit_eval
             action_hold_min = config.action_hold_min_eval
             action_hold_max = config.action_hold_max_eval
+            use_action_hold = False
+            observation_gap_min = getattr(config, "observation_gap_min_eval", 1)
+            observation_gap_max = getattr(config, "observation_gap_max_eval", 1)
         else:
             raise ValueError(f"Invalid mode: {mode}")
     
         env = GymEnv(name=task, 
                      action_repeat=config.action_repeat, 
                      time_limit= config.time_limit_train if "train" in mode else config.time_limit_eval,
-                     irregular=config.irregular,
+                     use_action_hold=use_action_hold,
                      action_hold_min= action_hold_min,
                      action_hold_max= action_hold_max,
+                     observation_gap_min=observation_gap_min,
+                     observation_gap_max=observation_gap_max,
                      seed = config.seed
         )
         if mode == "train":
@@ -390,10 +444,10 @@ def main(config):
             "Multi-environment support requires aligned per-environment time grids "
             "and reset handling."
         )
-    if not config.use_replay_buffer and getattr(config, "irregular", False):
+    if not config.use_replay_buffer and getattr(config, "use_action_hold", False):
         raise ValueError(
-            "The old dataset path currently requires irregular=False. "
-            "Use the new replay buffer for irregular time grids."
+            "The old dataset path currently requires use_action_hold=False. "
+            "Use the new replay buffer for action-hold time grids."
         )
     if (
         config.use_sde
@@ -644,6 +698,7 @@ def main(config):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--configs", nargs="+")
+    parser.add_argument("--logdir", type=str, default=None)
     args, remaining = parser.parse_known_args()
     print("Command Line Args:  ", args, remaining)
     configs = yaml.load(
@@ -658,13 +713,41 @@ if __name__ == "__main__":
             else:
                 base[key] = value
 
-    name_list = ["defaults", *args.configs] if args.configs else ["defaults"]
-    defaults = {}
-    for name in name_list:
-        recursive_update(defaults, configs[name])
+    resume_with_saved_config = False
+    if args.logdir:
+        logdir = pathlib.Path(args.logdir).expanduser()
+        resume_with_saved_config = (logdir / "latest.pt").exists() and (
+            logdir / "used_configs.yaml"
+        ).exists()
+
+    if resume_with_saved_config:
+        defaults = yaml.load((logdir / "used_configs.yaml").read_text())
+        config_source = f"resume config from {logdir / 'used_configs.yaml'}"
+    else:
+        name_list = ["defaults", *args.configs] if args.configs else ["defaults"]
+        defaults = {}
+        for name in name_list:
+            recursive_update(defaults, configs[name])
+        config_source = (
+            f"configs.yaml ({args.configs if args.configs else ['defaults']})"
+        )
     parser = argparse.ArgumentParser()
     for key, value in sorted(defaults.items(), key=lambda x: x[0]):
         arg_type = tools.args_type(value)
         parser.add_argument(f"--{key}", type=arg_type, default=arg_type(value))
     print("Parsed config-------------------------------------------")
-    main(parser.parse_args(remaining))
+    config = parser.parse_args(remaining)
+    if args.logdir is not None:
+        config.logdir = args.logdir
+    if config.logdir is None:
+        raise ValueError(
+            "No logdir configured. Please pass --logdir <path> or set logdir in the config."
+        )
+    print("Config source:", config_source)
+
+    resolved_logdir = pathlib.Path(config.logdir).expanduser()
+    resolved_logdir.mkdir(parents=True, exist_ok=True)
+    with open(resolved_logdir / "used_configs.yaml", "w") as f:
+        yaml.dump(vars(config), f)
+
+    main(config)
