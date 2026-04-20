@@ -174,23 +174,22 @@ class Dreamer(nn.Module):
             latent, action = state
 
         obs = self._wm.preprocess(obs)
-        obs_valid = torch.ones_like(obs["is_first"], dtype=torch.bool)
-        if "obs_valid" in obs:
-            obs_valid = obs["obs_valid"].bool()
-        if obs_valid.numel() > 1 and not torch.all(obs_valid == obs_valid[0]):
+        obs_available = torch.ones_like(obs["is_first"], dtype=torch.bool)
+        if "obs_available" in obs:
+            obs_available = obs["obs_available"].bool()
+        if obs_available.numel() > 1 and not torch.all(obs_available == obs_available[0]):
             raise NotImplementedError(
                 "You are using parallel environments with inhomogeneous observation validity. This is currently not supported. "
             )
-        use_posterior = latent is None or bool(
-            torch.any(obs["is_first"].bool()) or torch.any(obs_valid)
-        )
-
-        if use_posterior:
+        
+        if obs_available[0]:  # checks if the first observation is available
             embed = self._wm.encoder(obs)
 
             # Code modification:
             # obs_step method of latent SDE model includes dt and current time of observation as parameters
             if self._config.use_sde:
+                latent = action = None
+
                 latent = self._wm.dynamics.obs_step(
                     latent,
                     action,

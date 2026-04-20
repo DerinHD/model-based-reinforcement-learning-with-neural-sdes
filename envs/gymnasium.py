@@ -66,7 +66,6 @@ class GymEnv(gym.Env):
                  name: str, 
                  action_repeat: int = 1, 
                  time_limit: float = 10.0, 
-                 seed: int = None, 
                  use_action_hold: bool = False,
                  action_hold_min: int = 1,
                  action_hold_max: int = 2,
@@ -82,8 +81,6 @@ class GymEnv(gym.Env):
             number of action repeats in the environment (typically 1)
         time_limit: float
             duration of an episode in the environment specified in seconds
-        seed: 
-            seed id to allow deterministic episodes
         use_action_hold:
             states if action holds are enabled or not
         action_hold_min:
@@ -98,12 +95,6 @@ class GymEnv(gym.Env):
         self._name = name
         # Initialize original environment 
         self._env = gym.make(name)
-
-        self.seed = seed
-
-        if seed is not None:
-            self._env.reset(seed=seed)
-        
 
         self._repeat = action_repeat 
         self._time_limit = time_limit 
@@ -207,7 +198,7 @@ class GymEnv(gym.Env):
         return spaces.Dict({
             "obs": obs_space, 
             "image": spaces.Box(0, 255, (64, 64, 3), dtype=np.uint8),  # dummy image space to be compatible with Dreamer
-            "obs_valid": spaces.Box(0, 1, (), dtype=np.bool_),
+            "obs_available": spaces.Box(0, 1, (), dtype=np.bool_),
         })
     
     @property
@@ -221,7 +212,7 @@ class GymEnv(gym.Env):
         obs: np.ndarray,
         is_first: bool = False,
         is_terminal: bool = False,
-        obs_valid: bool = True,
+        obs_available: bool = True,
     ):
         """wrap observation with additional data such as the flags is_first and is_terminal
         and the current time of the observation
@@ -252,7 +243,7 @@ class GymEnv(gym.Env):
             "is_first": is_first,
             "is_terminal": is_terminal,
             "time": self._time,
-            "obs_valid": np.bool_(obs_valid),
+            "obs_available": np.bool_(obs_available),
         }
     
     def reset(self, seed=None, options=None):
@@ -277,8 +268,8 @@ class GymEnv(gym.Env):
         self.make_time_grid()
 
         # If seed is given, parse to reset function
-        if self.seed is not None:
-            obs, _ = self._env.reset(seed=self.seed)
+        if seed is not None:
+            obs, _ = self._env.reset(seed=seed)
         else:
             obs, _ = self._env.reset()
         
@@ -295,7 +286,7 @@ class GymEnv(gym.Env):
             obs,
             is_first=True,
             is_terminal=False,
-            obs_valid=True,
+            obs_available=True,
         )
 
         return wrapped_observation
@@ -345,21 +336,21 @@ class GymEnv(gym.Env):
         # Update current time by the elapsed time 
         self._time += elapsed
 
-        obs_valid = True
+        obs_available = True
         if self._observation_gap_grid is not None:
             self._steps_until_next_observation -= steps_taken
-            obs_valid = done or self._steps_until_next_observation <= 0
-            if obs_valid and not done:
+            obs_available = done or self._steps_until_next_observation <= 0
+            if obs_available and not done:
                 self._schedule_next_observation()
 
-        agent_reward = float(last_reward) if obs_valid else 0.0
+        agent_reward = float(last_reward) if obs_available else 0.0
 
         # Wrap obswervation
         wrapped_obs = self._wrap_obs(
                             obs,
                             is_first=False,
                             is_terminal=done,
-                            obs_valid=obs_valid,
+                            obs_available=obs_available,
                         )
         
 
