@@ -397,7 +397,6 @@ def make_env(config, mode, id):
                      action_hold_max= action_hold_max,
                      observation_gap_min=observation_gap_min,
                      observation_gap_max=observation_gap_max,
-                     seed = config.seed
         )
         if mode == "train":
             env.set_physical_dt(config.dt_env_train)
